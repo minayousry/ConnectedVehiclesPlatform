@@ -1,3 +1,27 @@
+# Vehicle Data Handling Solution
+
+## Overview
+
+This solution integrates client-side vehicle simulation with a server-side data processing architecture to collect, stream, and store vehicular diagnostics data (OBD2). Designed to simulate real-world traffic scenarios and analyze vehicle performance, it comprises two main components:
+
+### Client Side
+
+- Utilizes **SUMO** (Simulation of Urban MObility) for simulating vehicles that generate OBD2 data.
+- Simulated vehicles send data over **Apache Kafka**, ensuring robust data streaming.
+- Targeted to run on **Windows machines**, facilitating ease of deployment.
+
+### Server Side
+
+- **Apache Kafka Server** acts as the central point for receiving OBD2 data streams from numerous clients.
+- **GreenPlum Database**, an MPP SQL database built on PostgreSQL, stores the ingested data, allowing for advanced data analytics.
+- The server components are designed to run on a **RHEL 9 VM**, providing a stable and secure environment for data processing and storage.
+
+## Conclusion
+
+By combining SUMO's traffic simulation capabilities with the robust data streaming and storage provided by Apache Kafka and GreenPlum Database, all running on a RHEL 9 VM, this framework offers a scalable and flexible solution for real-time vehicular data analysis.
+
+
+
 # Development Environment Setup Guide
 
 Welcome to the comprehensive setup guide for your development environment on Red Hat Enterprise Linux (RHEL) 9. This guide covers the installation of Visual Studio Code, Apache Kafka, GreenPlum Database, and the required Python packages to get you started.
