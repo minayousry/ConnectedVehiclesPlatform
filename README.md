@@ -20,6 +20,20 @@ This solution integrates client-side vehicle simulation with a server-side data 
 
 By combining SUMO's traffic simulation capabilities with the robust data streaming and storage provided by Apache Kafka and GreenPlum Database, all running on a RHEL 9 VM, this framework offers a scalable and flexible solution for real-time vehicular data analysis.
 
+# Steps to Run the Solution
+
+Follow these steps to get the vehicle data handling solution up and running, from initiating the servers to executing the client simulations.
+
+## Starting the Servers
+
+1. **Start Kafka and GreenPlum Server**:
+   Navigate to the server folder and execute the bash script provided. This script initiates both the Kafka and GreenPlum servers, setting up the necessary environment for data streaming and storage.
+   ```bash
+   cd server
+   ./run_all_servers.sh
+
+2. **Run fleet_server_run.py**
+3. **Run clients_run.py**
 
 
 # Development Environment Setup Guide
