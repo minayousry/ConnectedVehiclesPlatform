@@ -1,86 +1,119 @@
-# install vsc for redhat
-sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
-sudo sh -c 'echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" > /etc/yum.repos.d/vscode.repo'
+# Development Environment Setup Guide
 
-dnf check-update
-sudo dnf install code # or code-insiders
+Welcome to the comprehensive setup guide for your development environment on Red Hat Enterprise Linux (RHEL) 9. This guide covers the installation of Visual Studio Code, Apache Kafka, GreenPlum Database, and the required Python packages to get you started.
 
-install kafka
-sudo dnf install python3-pip
+## Table of Contents
 
+- [Visual Studio Code](#visual-studio-code)
+- [Apache Kafka](#apache-kafka)
+- [GreenPlum Database](#greenplum-database)
+- [Python Setup](#python-setup)
+- [Running GreenPlum Database](#running-greenplum-database)
 
-# Configure server properties
-## 1-get ip address:
-ip addr show
+---
 
-## 2-get the ip address beside inet
+## Visual Studio Code
 
-## 3-replace the ip address in the server.properties in the following lines
-listeners=PLAINTEXT://0.0.0.0:9092
-advertised.listeners=PLAINTEXT://your.vm.ip.address:9092
+Visual Studio Code (VS Code) is a free, open-source editor that supports debugging, embedded Git control, syntax highlighting, intelligent code completion, snippets, and code refactoring.
 
-## 4-sudo dnf install dbus-x11
-eval $(dbus-launch --sh-syntax)
+### Installation Steps:
 
-## 5-open ports in the firewall of RHEL 9:
-sudo firewall-cmd --zone=public --add-port=5432/tcp --permanent
-sudo firewall-cmd --reload
-sudo setenforce 0
+1. **Import Microsoft GPG Key**:
+    ```bash
+    sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
+    ```
 
+2. **Add VS Code Repository**:
+    ```bash
+    sudo sh -c 'echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" > /etc/yum.repos.d/vscode.repo'
+    ```
 
-## 6-Run Kafka using 2 commands
-zookeeper-server-start.sh $HOME/kafka/config/zookeeper.properties
-kafka-server-start.sh $HOME/kafka/config/server.properties
+3. **Install VS Code**:
+    ```bash
+    dnf check-update
+    sudo dnf install code # or code-insiders
+    ```
 
+## Apache Kafka
 
-# =======================GreenPlub================
-## 1-mkdir gpconfigs
-## 2-cp /usr/local/greenplum-db-7.1.0/docs/cli_help/gpconfigs/gpinitsystem_config ~/gpconfigs/my_gpinitsystem_config
-## 3-modify the following in my_gpinitsystem_config
-COORDINATOR_HOSTNAME=localhost
-MACHINE_LIST_FILE=/home/msamy/gpconfigs/hostfile_gpinitsystem
+Apache Kafka is a distributed streaming platform that lets you publish and subscribe to streams of records, store streams of records in a fault-tolerant way, and process streams of records as they occur.
 
-## 4-touch ~/gpconfigs/hostfile_gpinitsystem
+### Installation and Configuration:
 
-## 5-in the file add:
-host1.example.com
-host2.example.com
+1. **Install Kafka Dependencies**:
+    ```bash
+    sudo dnf install python3-pip
+    ```
 
+2. **Configure Server Properties**:
+    - Obtain your IP address using `ip addr show`.
+    - Update the `server.properties` file with your IP address:
+        ```properties
+        listeners=PLAINTEXT://0.0.0.0:9092
+        advertised.listeners=PLAINTEXT://your.vm.ip.address:9092
+        ```
 
-## 6-Run the following command:
-echo "localhost" > ~/gpconfigs/hostfile.txt
-sudo mkdir -p /data/coordinator
-sudo chown msamy:msamy /data/coordinator
-chmod 700 /data/coordinator
-ssh-keygen -t rsa -b 2048
-chmod 700 ~/.ssh
-cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
-chmod 600 ~/.ssh/authorized_keys
-source /usr/local/greenplum-db/greenplum_path.sh
-sudo mkdir -p /data1/primary
-sudo chown msamy:msamy /data1/primary
-chmod 700 /data1/primary
+3. **System Configurations**:
+    ```bash
+    sudo dnf install dbus-x11
+    eval $(dbus-launch --sh-syntax)
+    sudo firewall-cmd --zone=public --add-port=5432/tcp --permanent
+    sudo firewall-cmd --reload
+    sudo setenforce 0
+    ```
 
-sudo mkdir -p /data2/primary
-sudo chown msamy:msamy /data2/primary
-chmod 700 /data2/primary
+4. **Running Kafka**:
+    Refer to the [official Kafka documentation](https://linuxtldr.com/installing-apache-kafka/?utm_content=cmp-true#google_vignette) for running Kafka using:
+    - `zookeeper-server-start.sh $HOME/kafka/config/zookeeper.properties`
+    - `kafka-server-start.sh $HOME/kafka/config/server.properties`
 
-## 7-Create and intialize database:
-gpinitsystem -c ~/gpconfigs/my_gpinitsystem_config -h ~/gpconfigs/hostfile.txt
+## GreenPlum Database
 
-## 8-Set the Environment configuration for the shell
-source /usr/local/greenplum-db-7.1.0/greenplum_path.sh
-export COORDINATOR_DATA_DIRECTORY=/data/coordinator/gpseg-1
+GreenPlum Database is an MPP SQL database based on PostgreSQL and is designed for large-scale data warehousing and analytics.
 
-## 9-Verify the Greenplum Installation:
-gpstate -d /data/coordinator/gpseg-1
+### Setup and Initialization:
 
+1. **Configuration Files**:
+    ```bash
+    mkdir gpconfigs
+    cp /usr/local/greenplum-db-7.1.0/docs/cli_help/gpconfigs/gpinitsystem_config ~/gpconfigs/my_gpinitsystem_config
+    ```
 
-# in Python
+2. **Modify `my_gpinitsystem_config`** as per your setup requirements.
+
+3. **Prepare System and Database**:
+    Follow the detailed steps provided in the previous instructions for setting up your GreenPlum environment, including creating directories, generating SSH keys, and modifying host files.
+
+4. **Initialize Database**:
+    ```bash
+    gpinitsystem -c ~/gpconfigs/my_gpinitsystem_config -h ~/gpconfigs/hostfile.txt
+    ```
+
+5. **Environment Configuration**:
+    ```bash
+    source /usr/local/greenplum-db-7.1.0/greenplum_path.sh
+    export COORDINATOR_DATA_DIRECTORY=/data/coordinator/gpseg-1
+    ```
+
+6. **Verify Installation**:
+    ```bash
+    gpstate -d /data/coordinator/gpseg-1
+    ```
+
+## Python Setup
+
+Ensure you have the necessary Python packages installed for your projects.
+
+### Install psycopg2-binary:
+
+```bash
 pip install psycopg2-binary
+```
 
+## running-greenplum-database
 
-# To run greenPlum database
+```bash
 source /usr/local/greenplum-db-7.1.0/greenplum_path.sh
 export COORDINATOR_DATA_DIRECTORY=/data/coordinator/gpseg-1
 gpstart
+```
