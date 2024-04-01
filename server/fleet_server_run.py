@@ -22,7 +22,7 @@ host = 'localhost'
 port = '5432'  # Default port for Greenplum and PostgreSQL
 default_dbname = "postgres"
 dbname = "OBD2_Data_Fleet_database"
-db_batch_size = 1
+db_batch_size = 50
 
 # Kafka Consumer to receive messages from the 'test' topic
 def kafkaConsumer(queue):
