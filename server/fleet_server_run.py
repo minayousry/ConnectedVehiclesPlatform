@@ -7,6 +7,7 @@ from multiprocessing import Process, Queue
 from psycopg2 import sql
 import psycopg2.extras
 
+
 # Configuration for connecting to your Kafka server
 kafka_server = '127.0.0.1:9092'  # this to the Kafka server address
 topic_name = 'OBD2_data'
@@ -15,13 +16,13 @@ received_msgs = []
 time_diff_list = []
 
 # Configuration for GreenPlum Database
-user = 'msamy'
+user = 'mina_yousry_iti'
 password = 'my_psw'
 host = 'localhost'
 port = '5432'  # Default port for Greenplum and PostgreSQL
 default_dbname = "postgres"
 dbname = "OBD2_Data_Fleet_database"
-db_batch_size = 30
+db_batch_size = 1
 
 # Kafka Consumer to receive messages from the 'test' topic
 def kafkaConsumer(queue):
@@ -39,8 +40,7 @@ def kafkaConsumer(queue):
     
         for message in consumer:
             received_msg = message.value
-            queue.put(received_msg)  # Send data to the queue
-            received_msgs.append(received_msg)
+            queue.put(received_msg)
     except Exception as e:
         print(f"Kafka consumer error: {e}")
     finally:
@@ -101,7 +101,7 @@ def CreateDatabaseifNotExists():
     return result
 
 
-def insert_records(conn, records):
+def insertRecords(conn, records):
     cursor = conn.cursor()
     try:
         psycopg2.extras.execute_batch(cursor, """
@@ -127,6 +127,7 @@ def storeInDatabase(queue):
     conn.autocommit = False
     
     createTable(cursor)
+    clearTable(conn,cursor,)
 
     records_to_insert = []
     
@@ -135,14 +136,14 @@ def storeInDatabase(queue):
             data = queue.get()
             if data == "STOP" and records_to_insert:
                 # Insert any remaining records
-                insert_records(conn, records_to_insert)
+                insertRecords(conn, records_to_insert)
                 break
             elif data == "STOP":
                 break
             
             records_to_insert.append(tuple(data))
             if len(records_to_insert) >= db_batch_size:  # Adjust batch size as appropriate
-                insert_records(conn, records_to_insert)
+                insertRecords(conn, records_to_insert)
                 records_to_insert = []
 
     finally:
@@ -176,21 +177,59 @@ def calculateTimeDifference(conn,cursor):
     
 def createExcelFile():
 
-    #Generate Excel file
-    cols = ['VehicleId','Tx_DateTime', 'Coordination', 'x_pos','y_pos','gps_lon','gps_lat',
-            'Speed', 'RoadID', 'LaneId','Displacement', 'TurnAngle', 'Acceleration',
-            'FuelConsumption', 'Co2Consumption','Deceleration','databse_storag_time','time_difference']
+    conn,cursor = connectToDatabase()
 
-    print(time_diff_list)
-    #received_msgs.append(time_diff_list)
-    dataset = pd.DataFrame(received_msgs, index=None, columns=cols)
-    dataset.to_excel("obd2_data_report.xlsx", index=False)
+    # Define your SQL query
+    query = """
+    SELECT vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
+    lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
+    co2_consumption, deceleration, storage_time, 
+    EXTRACT(EPOCH FROM (storage_time - tx_time)) AS time_difference_seconds
+    FROM OBD2_table;
+    """
 
+    # Execute the query and fetch all data
+    df = pd.read_sql_query(query, conn)
+
+    df.columns = ['VehicleId', 'Tx_DateTime', 'x_pos', 'y_pos', 'gps_lon', 'gps_lat',
+                  'Speed', 'RoadID', 'LaneId', 'Displacement', 'TurnAngle', 'Acceleration',
+                  'FuelConsumption', 'Co2Consumption', 'Deceleration', 'database_storage_time',"time_difference_in_secs"]
+
+    try:
+        #received_msgs.append(time_diff_list)
+        # Generate Excel file
+        df.to_excel("obd2_data_report.xlsx", index=False)
+    
+    except Exception as e:
+            print(f"Failed to create excel file: {e}")
+    finally:
+        closeDatabaseConnection(conn,cursor)
 
 def closeDatabaseConnection(cursor,conn):
     # Close the cursor and connection
     cursor.close()
     conn.close()
+
+
+def clearTable(conn,cursor):
+    try:
+
+        # SQL command to TRUNCATE table
+        truncate_command = f"TRUNCATE TABLE OBD2_table;"
+        
+        # Execute the command
+        cursor.execute(truncate_command)
+        
+        # Commit the transaction
+        conn.commit()
+        
+        print(f"Table OBD2_table has been cleared.")
+        
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+
+
 
 if __name__ == '__main__':
     
@@ -215,6 +254,5 @@ if __name__ == '__main__':
     queue.put("STOP")
     db_process.join()
 
-      
     createExcelFile()
     

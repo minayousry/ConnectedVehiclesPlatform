@@ -7,7 +7,7 @@ from kafka import KafkaProducer
 import json
 
 # Configuration for connecting to your Kafka server
-kafka_server = '127.0.0.1:9092'  # this to the Kafka server address
+kafka_server = '34.91.158.199:9092'  # this to the Kafka server address
 topic_name = 'OBD2_data'
 
 # Confiurations for SUMO
@@ -15,7 +15,7 @@ sumoCmd = ["sumo", "-c", "osm.sumocfg"]
 
 def getdatetime():
         utc_now = pytz.utc.localize(datetime.datetime.utcnow())
-        currentDT = utc_now.astimezone(pytz.timezone("Europe/London"))
+        currentDT = utc_now.astimezone(pytz.timezone("Atlantic/Reykjavik"))
         DATIME = currentDT.strftime("%Y-%m-%d %H:%M:%S")
         return DATIME
 
