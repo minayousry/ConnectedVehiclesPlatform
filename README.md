@@ -155,3 +155,39 @@ source /usr/local/greenplum-db-7.1.0/greenplum_path.sh
 export COORDINATOR_DATA_DIRECTORY=/data/coordinator/gpseg-1
 gpstart
 ```
+
+
+## Install Redis
+
+Follow these commands to install Redis on your system:
+
+```bash
+sudo dnf update
+sudo dnf install redis
+sudo systemctl start redis
+sudo systemctl enable redis
+```
+
+## How to set psw
+```bash
+redis-cli
+set mykey somevalue
+get mykey
+```
+
+## How to install WebSockets
+```bash
+pip3 install websockets
+pip install aioredis
+```
+
+## How to open ports in the firewall
+```bash
+sudo firewall-cmd --zone=public --add-port=6789/tcp --permanent
+sudo firewall-cmd --reload
+
+
+sudo firewall-cmd --zone=public --add-port=8765/tcp --permanent
+sudo firewall-cmd --reload
+```
+
