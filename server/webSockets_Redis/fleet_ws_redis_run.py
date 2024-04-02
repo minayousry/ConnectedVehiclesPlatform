@@ -7,7 +7,7 @@ from datetime import datetime
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-async def db_writer(queue):
+async def dbWriter(queue):
     
     redis = None
         
@@ -37,18 +37,13 @@ async def db_writer(queue):
         #print(f"Stored message #{msg_id} in Redis.")
       
     # Close Redis connection explicitly if necessary
-    await redis.close()
-        
+    await redis.close()      
 
-    
-
-      
-
-def db_writer_process(queue):
-    asyncio.run(db_writer(queue))
+def dbWriterProcess(queue):
+    asyncio.run(dbWriter(queue))
 
 
-async def websocket_server_handler(websocket, path, queue):
+async def websocketServerHandler(websocket, path, queue):
     try:
         while True:
             try:
@@ -66,14 +61,9 @@ async def websocket_server_handler(websocket, path, queue):
         # Handle the connection closed, either by client or server
         print("WebSocket connection closed.")
     
-    """    
-    async for message in websocket:
-        #print(f"Received message: {message}")
-        queue.put(message)
-    """ 
 
 
-async def run_websocket_server(queue):
+async def runWebsocketServer(queue):
     server = await websockets.serve(lambda ws, path: websocket_server_handler(ws, path, queue), "0.0.0.0", 8765)
     
     try:
@@ -84,11 +74,11 @@ async def run_websocket_server(queue):
         server.close()
         await server.wait_closed()
         
-def websocket_server_process(queue):
-    asyncio.run(run_websocket_server(queue))
+def websocketServerProcess(queue):
+    asyncio.run(runWebsocketServer(queue))
 
 
-async def fetch_data_from_redis():
+async def fetchDataFromRedis():
     redis = await aioredis.from_url("redis://localhost", encoding="utf-8", decode_responses=True)
     
     # Example: Fetching multiple keys. Adjust based on how you've structured your data.
@@ -104,7 +94,7 @@ def createExcelFile():
     
     print("creating excel sheet")
 
-    data = asyncio.run(fetch_data_from_redis())
+    data = asyncio.run(fetchDataFromRedis())
     
     
     
@@ -146,24 +136,16 @@ def createExcelFile():
 
 if __name__ == "__main__":
     
-    createExcelFile()
-    """ 
     queue = Queue()
 
-    db_process = Process(target=db_writer_process, args=(queue,))
-    ws_process = Process(target=websocket_server_process, args=(queue,))
+    db_process = Process(target=dbWriterProcess, args=(queue,))
+    ws_process = Process(target=websocketServerProcess, args=(queue,))
 
     db_process.start()
     ws_process.start()
 
-    print("Here 1")
     ws_process.join()
-    print("Here 2")
-    #queue.put("STOP")  # Signal the DB writer to stop
-    print("Here 3")
     db_process.join()
-    print("Here 4")
     ws_process.terminate()
-    print("Here 5")
+    
     createExcelFile()
-    """
