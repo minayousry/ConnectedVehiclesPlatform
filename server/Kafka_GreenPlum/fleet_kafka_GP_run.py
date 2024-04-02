@@ -7,11 +7,10 @@ from multiprocessing import Process, Queue
 from psycopg2 import sql
 import psycopg2.extras
 
-
 # Configuration for connecting to your Kafka server
 kafka_server = '127.0.0.1:9092'  # this to the Kafka server address
 topic_name = 'OBD2_data'
-consumer_timeout_in_ms = 10000
+consumer_timeout_in_ms = 500
 received_msgs = []
 time_diff_list = []
 
@@ -22,7 +21,7 @@ host = 'localhost'
 port = '5432'  # Default port for Greenplum and PostgreSQL
 default_dbname = "postgres"
 dbname = "OBD2_Data_Fleet_database"
-db_batch_size = 50
+db_batch_size = 100
 
 # Kafka Consumer to receive messages from the 'test' topic
 def kafkaConsumer(queue):
@@ -115,8 +114,6 @@ def insertRecords(conn, records):
     except Exception as e:
         conn.rollback()
         print(f"Failed to insert batch: {e}")
-    finally:
-        cursor.close()
 
 
 def storeInDatabase(queue):
