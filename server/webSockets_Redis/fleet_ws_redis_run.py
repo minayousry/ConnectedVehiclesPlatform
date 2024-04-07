@@ -64,7 +64,7 @@ async def websocketServerHandler(websocket, path, queue):
 
 
 async def runWebsocketServer(queue):
-    server = await websockets.serve(lambda ws, path: websocket_server_handler(ws, path, queue), "0.0.0.0", 8765)
+    server = await websockets.serve(lambda ws, path: websocketServerHandler(ws, path, queue), "0.0.0.0", 8765)
     
     try:
         await asyncio.wait_for(asyncio.Future(), timeout=20)
