@@ -3,6 +3,9 @@ from influxdb import InfluxDBClient
 import multiprocessing
 import pandas as pd
 import paho.mqtt.client as mqtt
+from datetime import datetime
+import time
+from datetime import datetime
 
 database_name = "obd2_database"
 mqtt_broker_address = "localhost"
@@ -94,10 +97,24 @@ def create_excel_file(influx_client):
     # Drop each measurement
     for name in measurement_names:
         result = influx_client.query(f"SELECT * FROM \"{str(name)}\"")
-        #print the storage time
         points = list(result.get_points())
-        print(points[0])
         
+        for i in range(len(points)):
+            tx_time = points[i]['tx_time'].replace("\"","").strip()
+            storage_time = points[i]['time'][:-8].replace("\"","").replace("T"," ").strip()
+
+            date_object_tx_time = datetime.strptime(tx_time, '%Y-%m-%d %H:%M:%S')
+            date_object_storage_time = datetime.strptime(storage_time, '%Y-%m-%d %H:%M:%S')
+            date_object_time_diff = date_object_storage_time - date_object_tx_time
+
+        
+            days = date_object_time_diff.days
+            seconds = date_object_time_diff.seconds
+            hours, remainder = divmod(seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            
+            points[i]['time_difference'] = f"{days} days, {hours:02}:{minutes:02}:{seconds:02}"
+          
         df = pd.DataFrame(points)
         all_data_frames.append(df)
     
