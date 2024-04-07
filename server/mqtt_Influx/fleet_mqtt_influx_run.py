@@ -38,7 +38,6 @@ def mqtt_process(data_queue):
         
         if (time_diff > 10) and (data_queue.empty()):
             mqtt_client.loop_stop()
-            print("end")
             print("finished")
             mqtt_client.loop_stop()
             break
@@ -53,7 +52,6 @@ def influx_process(influx_client,data_queue):
     while True:
         data_list = data_queue.get()  # Get the data from the queue
         if(data_list is not None):
-            print(str(msg_id))
             measurement_body = [
                 {
                     "measurement": str(msg_id),
@@ -86,21 +84,28 @@ def influx_process(influx_client,data_queue):
 def create_excel_file(influx_client):
     
     print("Creating Excel file")
-    #retrieve the data from influx database
-    msg_x = 1099
-    query = f"SELECT * FROM \"{str(msg_x)}\""
+
+    all_data_frames = [] 
+     
+    # Fetch all measurements
+    measurements = influx_client.query('SHOW MEASUREMENTS').get_points()
+    measurement_names = [measurement['name'] for measurement in measurements]
+
+    # Drop each measurement
+    for name in measurement_names:
+        result = influx_client.query(f"SELECT * FROM \"{str(name)}\"")
+        #print the storage time
+        points = list(result.get_points())
+        print(points[0])
+        
+        df = pd.DataFrame(points)
+        all_data_frames.append(df)
     
-    result = influx_client.query(query)
-    #get the points
-    points = result.get_points()
-    
-    for point in points:
-        print(point['time'])
-    
-    df = pd.DataFrame(points)
+    # Concatenate all data frames into a single data frame
+    final_df = pd.concat(all_data_frames, ignore_index=True)
     
     # Write the DataFrame to an Excel file.
-    df.to_excel('obd2_data_report.xlsx', index=False)
+    final_df.to_excel('obd2_data_report.xlsx', index=False)
     
            
 
