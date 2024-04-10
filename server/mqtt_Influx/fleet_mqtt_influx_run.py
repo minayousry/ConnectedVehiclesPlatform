@@ -50,39 +50,38 @@ def mqtt_process(data_queue):
     
 
 # InfluxDB process
-def influx_process(influx_client,data_queue):
+def influx_process(influx_client, data_queue):
     msg_id = 0
+    measurement_body = []
     while True:
         data_list = data_queue.get()  # Get the data from the queue
-        if(data_list is not None):
-            measurement_body = [
-                {
-                    "measurement": str(msg_id),
-                    "fields": {
-                        "vehicle_id": data_list[0],
-                        "tx_time": data_list[1],
-                        "x_pos": float(data_list[2]),
-                        "y_pos": float(data_list[3]),
-                        "gps_lon": data_list[4],
-                        "gps_lat": data_list[5],
-                        "speed": float(data_list[6]),
-                        "road_id": data_list[7],
-                        "lane_id": data_list[8],
-                        "displacement": float(data_list[9]),
-                        "turn_angle": float(data_list[10]),
-                        "acceleration": float(data_list[11]),
-                        "fuel_consumption": float(data_list[12]),
-                        "co2_consumption": float(data_list[13]),
-                        "deceleration": data_list[14],
-                    }
+        if data_list is not None:
+            measurement = {
+                "measurement": str(msg_id),
+                "fields": {
+                    "vehicle_id": data_list[0],
+                    "tx_time": data_list[1],
+                    "x_pos": float(data_list[2]),
+                    "y_pos": float(data_list[3]),
+                    "gps_lon": data_list[4],
+                    "gps_lat": data_list[5],
+                    "speed": float(data_list[6]),
+                    "road_id": data_list[7],
+                    "lane_id": data_list[8],
+                    "displacement": float(data_list[9]),
+                    "turn_angle": float(data_list[10]),
+                    "acceleration": float(data_list[11]),
+                    "fuel_consumption": float(data_list[12]),
+                    "co2_consumption": float(data_list[13]),
+                    "deceleration": data_list[14],
                 }
-            ]
-            influx_client.write_points(measurement_body)
-            msg_id+=1
-            
+            }
+            measurement_body.append(measurement)
+            msg_id += 1
         else:
-            #end the process
+            # End the process
             break
+    influx_client.write_points(measurement_body)
         
 def create_excel_file(influx_client):
     
