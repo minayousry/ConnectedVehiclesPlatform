@@ -1,13 +1,14 @@
 import multiprocessing
+import uuid
 from cassandra.cluster import Cluster
 from proton.handlers import MessagingHandler
 from proton.reactor import Container 
-from proton import ContainerSASL
 from proton import Message
 import time
+from proton import SASL, Transport
 
 #Qpid configurations
-server_url = 'amqp://guest:guest@localhost' 
+server_url = '0.0.0.0:8888' 
 topic_name = 'obd2_data_queue'
 
 
@@ -18,20 +19,32 @@ server_address = '127.0.0.1'
 
 
 class Receiver(MessagingHandler):
-    def __init__(self, server_url, queue,queue_name):
+    
+    def __init__(self, url,queue):
         super(Receiver, self).__init__()
-        self.server_url = server_url
-        self.queue_name = queue_name
+        self.url = url
+        self.senders = {}
         self.queue = queue
-        print("init func called")
+        
 
     def on_start(self, event):
-        print("Attempting to connect...")
-        sasl = event.container.sasl()
-        sasl.allowed_mechs('PLAIN')  # Specify the allowed SASL mechanism
-        event.container.connect(url=self.server_url)
-        
-        
+        print("Listening on", self.url)
+        self.container = event.container
+        self.acceptor = event.container.listen(self.url)
+
+    def on_link_opening(self, event):
+        if event.link.is_sender:
+            if event.link.remote_source and event.link.remote_source.dynamic:
+                event.link.source.address = str(uuid.uuid4())
+                self.senders[event.link.source.address] = event.link
+            elif event.link.remote_target and event.link.remote_target.address:
+                event.link.target.address = event.link.remote_target.address
+                self.senders[event.link.remote_target.address] = event.link
+            elif event.link.remote_source:
+                event.link.source.address = event.link.remote_source.address
+        elif event.link.remote_target:
+            event.link.target.address = event.link.remote_target.address
+
     def on_message(self, event):
         print("onMessage func called")
         
@@ -43,26 +56,13 @@ class Receiver(MessagingHandler):
             return
         
         self.queue.put(message.body)
-    
-    def on_transport_error(self, event):
-        print("Transport error:", event.transport.condition)
-
-    def on_connection_opened(self, event):
-        print("Connection established.")
-        event.container.create_receiver(event.connection, self.queue_name)
-
-    def on_connection_error(self, event):
-        print("Connection failed.")
-
-    def on_disconnected(self, event):
-        print("Disconnected.")
-
 
 def receiverProcess(queue):
-    handler = Receiver(server_url, queue ,topic_name) 
+    handler = Receiver(server_url, queue) 
     Container(handler).run()
 
 def databaseProcess(queue):
+    
     cluster = Cluster(['localhost'])
     session = cluster.connect(keyspace_name)
     
@@ -71,11 +71,18 @@ def databaseProcess(queue):
         if message == "STOP":
             break
         print(f"Inserting into DB: {message}")
+    
         
-        session.execute(
-            f"INSERT INTO {keyspace_name}.{table_name} (id, message) VALUES (uuid(), %s)",
-            (message,)
-        )
+        insert_query = f"""
+        INSERT INTO {keyspace_name}.{table_name} ( \
+            vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, \
+            speed, road_id, lane_id, displacement, turn_angle,  \
+            acceleration, fuel_consumption, co2_consumption, deceleration, storage_time \
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, toTimeStamp(now()))
+        """
+
+        # Assuming message is a tuple containing values for each column in the table
+        session.execute(insert_query, message)
 
     cluster.shutdown()
 
@@ -90,16 +97,13 @@ if __name__ == "__main__":
     db = multiprocessing.Process(target=databaseProcess, args=(queue,))
     db.start()
     
-    # Example run duration: 50 seconds
-    print("Running for 50 seconds...")
-    time.sleep(50)
-
+    # Wait for the receiver and database process to finish
+    receiver.join()
+    
     # Signal to stop receiver and database process
     print("Sending stop signals...")
     queue.put("STOP")
 
-    # Wait for the receiver and database process to finish
-    receiver.join()
     db.join()
 
     print("All processes have been stopped.")
