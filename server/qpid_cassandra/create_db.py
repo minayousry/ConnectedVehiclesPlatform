@@ -38,15 +38,24 @@ def create_keyspace_and_table(cluster):
         fuel_consumption double,
         co2_consumption double,
         deceleration double,
-        storage_time timestamp
+        storage_time TIMESTAMP
     );
     """
+    
+    
     session.execute(table_query)
     print(f"Keyspace '{keyspace_name}' and table '{table_name}' are ready.")
     
     session.shutdown()
 
 
+def drop_keyspace(cluster):
+    session = cluster.connect()
+    session.execute(f"DROP KEYSPACE IF EXISTS {keyspace_name}")
+    print(f"Keyspace '{keyspace_name}' has been dropped.")
+    
+
 if __name__ == "__main__":
     cluster = Cluster([server_address])
+    drop_keyspace(cluster)
     create_keyspace_and_table(cluster)
