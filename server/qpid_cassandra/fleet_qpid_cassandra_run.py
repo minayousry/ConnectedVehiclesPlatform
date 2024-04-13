@@ -3,7 +3,7 @@ import uuid
 from cassandra.cluster import Cluster
 from proton.handlers import MessagingHandler
 from proton.reactor import Container 
-from proton import Message
+from proton import Event, Message
 import time
 from uuid import uuid4
 from datetime import datetime
@@ -26,42 +26,42 @@ class Receiver(MessagingHandler):
         self.url = url
         self.senders = {}
         self.queue = queue
+        self.last_message_time = time.time() 
+        self.container = None 
+        
+    def on_connection_closed(self, event):
+        print("Connection is closed")
+        #end the connection
+        queue.put("STOP")
+        if self.container:
+            self.container.stop()
         
 
     def on_start(self, event):
         print("Listening on", self.url)
         self.container = event.container
         self.acceptor = event.container.listen(self.url)
-
-    def on_link_opening(self, event):
-        if event.link.is_sender:
-            if event.link.remote_source and event.link.remote_source.dynamic:
-                event.link.source.address = str(uuid.uuid4())
-                self.senders[event.link.source.address] = event.link
-            elif event.link.remote_target and event.link.remote_target.address:
-                event.link.target.address = event.link.remote_target.address
-                self.senders[event.link.remote_target.address] = event.link
-            elif event.link.remote_source:
-                event.link.source.address = event.link.remote_source.address
-        elif event.link.remote_target:
-            event.link.target.address = event.link.remote_target.address
+    
+    def on_link_closed(self, event: Event):
+        print("link is closed")
+        self.container.stop()
 
     def on_message(self, event):
-        print("onMessage func called")
-        
         message = event.message
-        
-        if message.body == "STOP":
-            event.receiver.close()
-            event.connection.close()
-            return
-        
         self.queue.put(message.body)
+        self.last_message_time = time.time()
+        
+    def on_timer_task(self, event):
+        print("onTimerTask func called")
+        if not self.messages_received:
+            print("No messages received yet.")
 
 def receiverProcess(queue):
-    handler = Receiver(server_url, queue) 
-    Container(handler).run()
-
+    handler = Receiver(server_url, queue)
+    container = Container(handler) 
+    container.run()
+    
+    
 def databaseProcess(queue):
     try:
         cluster = Cluster(['localhost'])
@@ -71,10 +71,8 @@ def databaseProcess(queue):
             message = queue.get()
             
             if  message is None or message == "STOP":
+                print("Stopping the database process...")
                 break
-            print(f"Inserting into DB: {message}")
-            
-            
 
             # Parameterized query for security
             insert_query = f"INSERT INTO {keyspace_name}.{table_name} (id, vehicle_id,tx_time,x_pos,y_pos, \
@@ -112,8 +110,9 @@ if __name__ == "__main__":
     
     # Signal to stop receiver and database process
     print("Sending stop signals...")
+    
+    #stop the database process once the receiver process is stopped
     queue.put("STOP")
-
     db.join()
-
+    
     print("All processes have been stopped.")
