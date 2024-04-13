@@ -5,7 +5,8 @@ from proton.handlers import MessagingHandler
 from proton.reactor import Container 
 from proton import Message
 import time
-from proton import SASL, Transport
+from uuid import uuid4
+from datetime import datetime
 
 #Qpid configurations
 server_url = '0.0.0.0:8888' 
@@ -62,29 +63,38 @@ def receiverProcess(queue):
     Container(handler).run()
 
 def databaseProcess(queue):
-    
-    cluster = Cluster(['localhost'])
-    session = cluster.connect(keyspace_name)
-    
-    while True:
-        message = queue.get() 
-        if message == "STOP":
-            break
-        print(f"Inserting into DB: {message}")
-    
-        
-        insert_query = f"""
-        INSERT INTO {keyspace_name}.{table_name} ( \
-            vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, \
-            speed, road_id, lane_id, displacement, turn_angle,  \
-            acceleration, fuel_consumption, co2_consumption, deceleration, storage_time \
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, toTimeStamp(now()))
-        """
+    try:
+        cluster = Cluster(['localhost'])
+        session = cluster.connect(keyspace_name)
 
-        # Assuming message is a tuple containing values for each column in the table
-        session.execute(insert_query, message)
+        while True:
+            message = queue.get()
+            
+            if  message is None or message == "STOP":
+                break
+            print(f"Inserting into DB: {message}")
+            
+            
 
-    cluster.shutdown()
+            # Parameterized query for security
+            insert_query = f"INSERT INTO {keyspace_name}.{table_name} (id, vehicle_id,tx_time,x_pos,y_pos, \
+                                                                       gps_lon, gps_lat, speed,road_id,lane_id, \
+                                                                       displacement, turn_angle, acceleration, fuel_consumption,co2_consumption, \
+                                                                       deceleration,storage_time \
+                                                                       ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+            
+            timestamp  = datetime.now()                                                   
+            
+            session.execute(insert_query,( uuid4(), message[0],message[1],message[2],message[3] \
+                                            ,message[4],message[5],message[6],message[7],message[8] \
+                                            ,message[9],message[10],message[11],message[12],message[13] \
+                                            ,message[14],timestamp
+                                        ) )
+            
+    except Exception as e:
+        print(f"Error during database operation: {e}")
+    finally:
+        cluster.shutdown()
 
 if __name__ == "__main__":
     queue = multiprocessing.Queue()
