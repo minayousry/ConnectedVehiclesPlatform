@@ -7,7 +7,8 @@ from proton import Event, Message
 import time
 from uuid import uuid4
 from datetime import datetime
-
+import pandas as pd
+    
 #Qpid configurations
 server_url = '0.0.0.0:8888' 
 topic_name = 'obd2_data_queue'
@@ -94,7 +95,42 @@ def databaseProcess(queue):
     finally:
         cluster.shutdown()
 
+        
+def createExcelFile():
+    cluster = Cluster(['localhost'])
+    session = cluster.connect(keyspace_name)
+    
+    try:
+        select_query = f"""SELECT vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
+                            lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
+                            co2_consumption, deceleration, storage_time 
+                            FROM {keyspace_name}.{table_name}"""
+                        
+
+        # Execute query and fetch data
+        rows = session.execute(select_query)
+        
+        df = pd.DataFrame(rows.current_rows)
+
+        time_diff = df['storage_time'] - df['tx_time']
+        
+        # Convert time difference to seconds (assuming all values are valid)
+        df['time_diff_seconds'] = time_diff.dt.total_seconds()
+            
+        # Generate Excel report
+        df.to_excel("obd2_data_report.xlsx", index=False)
+        #print("Excel file has been created.")
+    
+    except Exception as e:
+        print(f"Failed to create excel file: {e}")
+    
+    finally:
+        session.shutdown()
+        cluster.shutdown()
+
 if __name__ == "__main__":
+    
+    """ 
     queue = multiprocessing.Queue()
 
     # Start receiver process
@@ -116,3 +152,5 @@ if __name__ == "__main__":
     db.join()
     
     print("All processes have been stopped.")
+    """
+    createExcelFile()
