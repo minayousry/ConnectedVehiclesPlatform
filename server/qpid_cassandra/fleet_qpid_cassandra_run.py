@@ -119,7 +119,7 @@ def createExcelFile():
             
         # Generate Excel report
         df.to_excel("obd2_data_report.xlsx", index=False)
-        #print("Excel file has been created.")
+        print("Excel file has been created.")
     
     except Exception as e:
         print(f"Failed to create excel file: {e}")
@@ -130,7 +130,7 @@ def createExcelFile():
 
 if __name__ == "__main__":
     
-    """ 
+    
     queue = multiprocessing.Queue()
 
     # Start receiver process
@@ -152,5 +152,5 @@ if __name__ == "__main__":
     db.join()
     
     print("All processes have been stopped.")
-    """
+    
     createExcelFile()
