@@ -1,14 +1,22 @@
 import multiprocessing
-import uuid
 from cassandra.cluster import Cluster
 from proton.handlers import MessagingHandler
 from proton.reactor import Container 
-from proton import Event, Message
+from proton import Event
 import time
 from uuid import uuid4
 from datetime import datetime
 import pandas as pd
-    
+import sys
+import os
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+
+import server_utilities
+
+
 #Qpid configurations
 server_url = '0.0.0.0:8888' 
 topic_name = 'obd2_data_queue'
@@ -96,11 +104,16 @@ def databaseProcess(queue):
         cluster.shutdown()
 
         
-def createExcelFile():
-    cluster = Cluster(['localhost'])
-    session = cluster.connect(keyspace_name)
+def extractFromDatabase():
+    
+    result = None
+    cluster = None
+    session = None
     
     try:
+        cluster = Cluster(['localhost'])
+        session = cluster.connect(keyspace_name)
+        
         select_query = f"""SELECT vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
                             lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
                             co2_consumption, deceleration, storage_time 
@@ -110,23 +123,21 @@ def createExcelFile():
         # Execute query and fetch data
         rows = session.execute(select_query)
         
-        df = pd.DataFrame(rows.current_rows)
+        result = pd.DataFrame(rows.current_rows)
 
-        time_diff = df['storage_time'] - df['tx_time']
-        
-        # Convert time difference to seconds (assuming all values are valid)
-        df['time_diff_seconds'] = time_diff.dt.total_seconds()
-            
-        # Generate Excel report
-        df.to_excel("obd2_data_report.xlsx", index=False)
-        print("Excel file has been created.")
+        print("succeded to extract info from database.")
     
     except Exception as e:
-        print(f"Failed to create excel file: {e}")
+        print(f"Failed to extract information from the database: {e}")
     
     finally:
         session.shutdown()
         cluster.shutdown()
+    
+    return result
+
+    
+    
 
 if __name__ == "__main__":
     
@@ -153,4 +164,7 @@ if __name__ == "__main__":
     
     print("All processes have been stopped.")
     
-    createExcelFile()
+    extracted_df = extractFromDatabase()
+    
+    if extracted_df is not None:
+        server_utilities.createExcelFile(extracted_df)
