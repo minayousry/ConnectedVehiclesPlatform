@@ -1,12 +1,18 @@
 
 import sys
 import os
-
+import pandas as pd
 
 
 def createExcelFile(obd2_data_frame):
 
     try:
+        if(type(obd2_data_frame['tx_time'].iloc[0]) == str):
+            obd2_data_frame['tx_time'] = pd.to_datetime(obd2_data_frame['tx_time'], format='%Y-%m-%d %H:%M:%S')
+        
+        if(type(obd2_data_frame['storage_time'].iloc[0]) == str):
+            obd2_data_frame['storage_time'] = pd.to_datetime(obd2_data_frame['storage_time'], format='%Y-%m-%d %H:%M:%S')
+    
         time_diff = obd2_data_frame['storage_time'] - obd2_data_frame['tx_time']
         
         # Convert time difference to seconds (assuming all values are valid)

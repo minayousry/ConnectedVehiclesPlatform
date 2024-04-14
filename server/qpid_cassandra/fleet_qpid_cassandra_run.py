@@ -7,14 +7,11 @@ import time
 from uuid import uuid4
 from datetime import datetime
 import pandas as pd
+
 import sys
 import os
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-sys.path.append(parent_dir)
 
-import server_utilities
 
 
 #Qpid configurations
@@ -136,8 +133,15 @@ def extractFromDatabase():
     
     return result
 
+def createReport():
+    extracted_df = extractFromDatabase()
     
-    
+    if extracted_df is not None:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(current_dir)
+        sys.path.append(parent_dir)
+        import server_utilities
+        server_utilities.createExcelFile(extracted_df)
 
 if __name__ == "__main__":
     
@@ -164,7 +168,6 @@ if __name__ == "__main__":
     
     print("All processes have been stopped.")
     
-    extracted_df = extractFromDatabase()
+    createReport()
     
-    if extracted_df is not None:
-        server_utilities.createExcelFile(extracted_df)
+    

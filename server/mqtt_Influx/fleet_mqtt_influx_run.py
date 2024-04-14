@@ -4,6 +4,9 @@ import multiprocessing
 import paho.mqtt.client as mqtt
 from datetime import datetime
 import pandas as pd
+import sys
+import os
+
 
 database_name = "obd2_database"
 mqtt_broker_address = "localhost"
@@ -51,7 +54,7 @@ def mqtt_process(data_queue):
         time_diff = current_time - start_time
         #print(time_diff)
         
-        if (time_diff > 20) and (data_queue.empty()):
+        if (time_diff > 50) and (data_queue.empty()):
             mqtt_client.loop_stop()
             print("finished")
             data_queue.put("STOP")
@@ -92,7 +95,8 @@ def influx_process(influx_client, data_queue):
                     "storage_time": str(timestamp)
                 }
             }
-            #print(measurement)
+            
+            print(measurement)
             measurement_body.append(measurement)
             msg_id += 1
         else:
@@ -100,7 +104,7 @@ def influx_process(influx_client, data_queue):
             break
     influx_client.write_points(measurement_body)
         
-def create_excel_file(influx_client):
+def extractFromDatabase(influx_client):
     
     print("Creating Excel file")
 
@@ -125,18 +129,31 @@ def create_excel_file(influx_client):
         
     df = pd.DataFrame(dict_list)
     
-    df.to_excel('obd2_data_report.xlsx', index=False)
-    print("Excel file created")
+    
+    
+    df['tx_time'] = df['tx_time'].str.replace('\"','').str.strip()
+    df['storage_time'] = df['storage_time'].str[:-7].str.replace('\"','').str.strip()
+    
+    
+    
+    return df
 
+def createReport(influx_client):
+    extracted_df = extractFromDatabase(influx_client)
+    
+    if extracted_df is not None:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(current_dir)
+        sys.path.append(parent_dir)
+        import server_utilities
+        server_utilities.createExcelFile(extracted_df)
+        
 if __name__ == '__main__':
     
     # Set up InfluxDB client
     influx_client = InfluxDBClient(host='localhost', port=8086)
     influx_client.switch_database(database_name)
-
-    #create_excel_file(influx_client)
-     
-     
+    
     # Create a multiprocessing Queue for IPC
     data_queue = multiprocessing.Queue()
 
@@ -158,10 +175,10 @@ if __name__ == '__main__':
     influx_proc.join()
     
     #mqtt_proc.terminate()
-    create_excel_file(influx_client)
+    createReport(influx_client)
     
     influx_client.close()
-    
+
     print("End of program")
     
     
