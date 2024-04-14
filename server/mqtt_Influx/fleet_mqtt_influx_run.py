@@ -1,15 +1,14 @@
 import time
 from influxdb import InfluxDBClient
 import multiprocessing
-import pandas as pd
 import paho.mqtt.client as mqtt
 from datetime import datetime
-import time
-from datetime import datetime
+import pandas as pd
 
 database_name = "obd2_database"
 mqtt_broker_address = "localhost"
 port_no = 1883
+
 
 # MQTT callback functions
 def on_connect(client, userdata, flags, rc):
@@ -21,16 +20,29 @@ def on_message(client, userdata, msg):
     #print(f"Received message: {msg.payload.decode()}")
     data_list = msg.payload.decode().split(',')
     data_queue.put(data_list)  # Put the data into the queue
+    
+def on_socket_close(client, userdata, msg):
+    print(f"Socket closed")
+    
+def on_disconnect(client, userdata, rc):
+    print(f"Disconnected with result code {rc}")
+    global socket_closed
+    socket_closed = True
+    
+    
 
 # MQTT process
 def mqtt_process(data_queue):
     mqtt_client = mqtt.Client()
     mqtt_client.on_connect = on_connect
     mqtt_client.on_message = on_message
+    mqtt_client.on_socket_close = on_socket_close
+    mqtt_client.on_disconnect = on_disconnect
+    
     mqtt_client.connect(mqtt_broker_address, port_no , 60)
     
     mqtt_client.loop_start()
-    
+ 
     # Get the current time in seconds
     start_time = time.time()
     
@@ -39,14 +51,16 @@ def mqtt_process(data_queue):
         time_diff = current_time - start_time
         #print(time_diff)
         
-        if (time_diff > 10) and (data_queue.empty()):
+        if (time_diff > 20) and (data_queue.empty()):
             mqtt_client.loop_stop()
             print("finished")
+            data_queue.put("STOP")
             mqtt_client.loop_stop()
             break
         elif not data_queue.empty():
             # Reset the start time
             start_time = time.time()
+    
     
 
 # InfluxDB process
@@ -55,16 +69,17 @@ def influx_process(influx_client, data_queue):
     measurement_body = []
     while True:
         data_list = data_queue.get()  # Get the data from the queue
-        if data_list is not None:
+        if data_list is not None and data_list != "STOP":
+            timestamp  = datetime.now() 
             measurement = {
                 "measurement": str(msg_id),
                 "fields": {
-                    "vehicle_id": data_list[0],
+                    "vehicle_id": data_list[0].replace('[',''),
                     "tx_time": data_list[1],
                     "x_pos": float(data_list[2]),
                     "y_pos": float(data_list[3]),
-                    "gps_lon": data_list[4],
-                    "gps_lat": data_list[5],
+                    "gps_lon": float(data_list[4]),
+                    "gps_lat": float(data_list[5]),
                     "speed": float(data_list[6]),
                     "road_id": data_list[7],
                     "lane_id": data_list[8],
@@ -73,9 +88,11 @@ def influx_process(influx_client, data_queue):
                     "acceleration": float(data_list[11]),
                     "fuel_consumption": float(data_list[12]),
                     "co2_consumption": float(data_list[13]),
-                    "deceleration": data_list[14],
+                    "deceleration": float(data_list[14].replace(']','')),
+                    "storage_time": str(timestamp)
                 }
             }
+            #print(measurement)
             measurement_body.append(measurement)
             msg_id += 1
         else:
@@ -94,36 +111,22 @@ def create_excel_file(influx_client):
     measurement_names = [measurement['name'] for measurement in measurements]
 
     # Drop each measurement
+    print(len(measurement_names))
+    
+    dict_list = []
+    
     for name in measurement_names:
         result = influx_client.query(f"SELECT * FROM \"{str(name)}\"")
         points = list(result.get_points())
         
-        for i in range(len(points)):
-            tx_time = points[i]['tx_time'].replace("\"","").strip()
-            storage_time = points[i]['time'][:-8].replace("\"","").replace("T"," ").strip()
-
-            date_object_tx_time = datetime.strptime(tx_time, '%Y-%m-%d %H:%M:%S')
-            date_object_storage_time = datetime.strptime(storage_time, '%Y-%m-%d %H:%M:%S')
-            date_object_time_diff = date_object_storage_time - date_object_tx_time
-
         
-            days = date_object_time_diff.days
-            seconds = date_object_time_diff.seconds
-            hours, remainder = divmod(seconds, 3600)
-            minutes, seconds = divmod(remainder, 60)
-            
-            points[i]['time_difference'] = f"{days} days, {hours:02}:{minutes:02}:{seconds:02}"
-          
-        df = pd.DataFrame(points)
-        all_data_frames.append(df)
+        for i in range(len(points)):
+            dict_list.append(points[i])
+        
+    df = pd.DataFrame(dict_list)
     
-    # Concatenate all data frames into a single data frame
-    final_df = pd.concat(all_data_frames, ignore_index=True)
-    
-    # Write the DataFrame to an Excel file.
-    final_df.to_excel('obd2_data_report.xlsx', index=False)
-    
-           
+    df.to_excel('obd2_data_report.xlsx', index=False)
+    print("Excel file created")
 
 if __name__ == '__main__':
     
@@ -131,6 +134,9 @@ if __name__ == '__main__':
     influx_client = InfluxDBClient(host='localhost', port=8086)
     influx_client.switch_database(database_name)
 
+    #create_excel_file(influx_client)
+     
+     
     # Create a multiprocessing Queue for IPC
     data_queue = multiprocessing.Queue()
 
@@ -147,7 +153,7 @@ if __name__ == '__main__':
     mqtt_proc.join()
     
     # Signal the InfluxDB process to stop
-    data_queue.put(None)
+    data_queue.put("STOP")
     
     influx_proc.join()
     
@@ -157,6 +163,8 @@ if __name__ == '__main__':
     influx_client.close()
     
     print("End of program")
+    
+    
     
 
 
