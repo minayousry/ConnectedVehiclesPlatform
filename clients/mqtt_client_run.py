@@ -44,23 +44,23 @@ def runScenario(client):
                 co2_cons = round(traci.vehicle.getCO2Emission(vehid), 2)
                 dece = round(traci.vehicle.getDecel(vehid), 2)
 
-                veh_data = {
-                    'vehid': vehid,
-                    'datetime': getdatetime(),
-                    'x_pos': x_pos,
-                    'y_pos': y_pos,
-                    'gps_lon': gps_lon,
-                    'gps_lat': gps_lat,
-                    'spd': spd,
-                    'edge': edge,
-                    'lane': lane,
-                    'displacement': displacement,
-                    'turnAngle': turnAngle,
-                    'acc': acc,
-                    'fuel_cons': fuel_cons,
-                    'co2_cons': co2_cons,
-                    'dece': dece
-                }
+                veh_data = [
+                    vehid,          # Vehicle ID as string
+                    str(getdatetime()),       # Datetime string
+                    float(x_pos),        # X position as float
+                    float(y_pos),        # Y position as float
+                    float(gps_lon),      # GPS longitude as float
+                    float(gps_lat),      # GPS latitude as float
+                    float(spd),          # Speed as float
+                    edge,                # Road ID as string
+                    lane,                # Lane ID as string
+                    float(displacement), # Displacement as float
+                    float(turnAngle),    # Turn angle as float
+                    float(acc),          # Acceleration as float
+                    float(fuel_cons),    # Fuel consumption as float
+                    float(co2_cons),     # CO2 consumption as float
+                    float(dece)          # Deceleration as float
+                ]
 
                 client.publish(mqtt_topic, json.dumps(veh_data))
 
