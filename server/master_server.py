@@ -5,6 +5,7 @@ import subprocess
 import os
 
 import Kafka_GreenPlum.greenplum_create_db as gp_db
+import mqtt_Influx.influx_create_db as influx_db
 
 
 import Kafka_GreenPlum.fleet_kafka_GP_run as kafka_gp
@@ -140,8 +141,14 @@ if __name__ == '__main__':
         setKafkaIpAddress(kafka_cfg_path,text_to_search,new_kafka_server)
         
     elif server_tech == "mqtt_influx":
+        bash_script_path = "./mqtt_Influx/run_mqtt_influx_servers.sh"
+        database_create_func = influx_db.createDatabase
         comm_process = mqtt_influx.mqtt_process
         database_process = mqtt_influx.influx_process
+        database_extract_func = mqtt_influx.extractFromDatabase
+        generation_path = "./mqtt_Influx/"
+        
+        
     elif server_tech == "qpid_cassandra":
         comm_process = qpid_cassandra.receiverProcess
         database_process = qpid_cassandra.extractFromDatabase
@@ -156,13 +163,13 @@ if __name__ == '__main__':
         exit(1)
  
     try:
-        result = runServers(bash_script_path)
-        
+        #result = runServers(bash_script_path)
+        result = True
         if result:
             print("Servers are running.")
-            status = database_create_func()
+            result = database_create_func()
             
-            if status:
+            if result:
                 print("Database is created")
             else:
                 print("Failed to create database.")
@@ -172,9 +179,9 @@ if __name__ == '__main__':
             exit(1)
             
         
-        process_status = runProcesses(comm_process, database_process)
+        result = runProcesses(comm_process, database_process)
         
-        if process_status:
+        if result:
             print("Processes have finished successfully.")
             
             createReport(database_extract_func,generation_path)

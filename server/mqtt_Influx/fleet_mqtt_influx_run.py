@@ -19,10 +19,10 @@ def on_connect(client, userdata, flags, rc):
     client.subscribe("mqtt/topic")
 
 
-def on_message(client, userdata, msg):
+def on_message(client, userdata, msg,queue):
     #print(f"Received message: {msg.payload.decode()}")
     data_list = msg.payload.decode().split(',')
-    data_queue.put(data_list)  # Put the data into the queue
+    queue.put(data_list)  # Put the data into the queue
     
 def on_socket_close(client, userdata, msg):
     print(f"Socket closed")
@@ -35,10 +35,10 @@ def on_disconnect(client, userdata, rc):
     
 
 # MQTT process
-def mqtt_process(data_queue):
+def mqtt_process(queue):
     mqtt_client = mqtt.Client()
     mqtt_client.on_connect = on_connect
-    mqtt_client.on_message = on_message
+    mqtt_client.on_message = lambda client, userdata, msg: on_message(client, userdata, msg, queue)
     mqtt_client.on_socket_close = on_socket_close
     mqtt_client.on_disconnect = on_disconnect
     
@@ -54,24 +54,29 @@ def mqtt_process(data_queue):
         time_diff = current_time - start_time
         #print(time_diff)
         
-        if (time_diff > 50) and (data_queue.empty()):
+        if (time_diff > 20) and (queue.empty()):
             mqtt_client.loop_stop()
             print("finished")
-            data_queue.put("STOP")
+            queue.put("STOP")
             mqtt_client.loop_stop()
             break
-        elif not data_queue.empty():
+        elif not queue.empty():
             # Reset the start time
             start_time = time.time()
     
     
 
 # InfluxDB process
-def influx_process(influx_client, data_queue):
+def influx_process(queue):
+    
+    # Set up InfluxDB client
+    influx_client = InfluxDBClient(host='localhost', port=8086)
+    influx_client.switch_database(database_name)
+    
     msg_id = 0
     measurement_body = []
     while True:
-        data_list = data_queue.get()  # Get the data from the queue
+        data_list = queue.get()  # Get the data from the queue
         if data_list is not None and data_list != "STOP":
             timestamp  = datetime.now() 
             measurement = {
@@ -96,18 +101,19 @@ def influx_process(influx_client, data_queue):
                 }
             }
             
-            print(measurement)
             measurement_body.append(measurement)
             msg_id += 1
         else:
             # End the process
             break
     influx_client.write_points(measurement_body)
+    influx_client.close()
         
-def extractFromDatabase(influx_client):
+def extractFromDatabase():
     
-    print("Creating Excel file")
-
+    influx_client = InfluxDBClient(host='localhost', port=8086)
+    influx_client.switch_database(database_name)
+    
     all_data_frames = [] 
      
     # Fetch all measurements
@@ -129,30 +135,19 @@ def extractFromDatabase(influx_client):
         
     df = pd.DataFrame(dict_list)
     
-    
-    
     df['tx_time'] = df['tx_time'].str.replace('\"','').str.strip()
     df['storage_time'] = df['storage_time'].str[:-7].str.replace('\"','').str.strip()
+
     
     
+    influx_client.close()
     
     return df
 
-def createReport(influx_client):
-    extracted_df = extractFromDatabase(influx_client)
-    
-    if extracted_df is not None:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        parent_dir = os.path.dirname(current_dir)
-        sys.path.append(parent_dir)
-        import server_utilities
-        server_utilities.createExcelFile(extracted_df)
         
 if __name__ == '__main__':
     
-    # Set up InfluxDB client
-    influx_client = InfluxDBClient(host='localhost', port=8086)
-    influx_client.switch_database(database_name)
+    
     
     # Create a multiprocessing Queue for IPC
     data_queue = multiprocessing.Queue()
@@ -162,7 +157,7 @@ if __name__ == '__main__':
     mqtt_proc.start()
 
     # Create and start the InfluxDB process
-    influx_proc = multiprocessing.Process(target=influx_process,args=(influx_client,data_queue,))
+    influx_proc = multiprocessing.Process(target=influx_process,args=(data_queue,))
     influx_proc.start()
 
 
@@ -174,10 +169,7 @@ if __name__ == '__main__':
     
     influx_proc.join()
     
-    #mqtt_proc.terminate()
-    createReport(influx_client)
-    
-    influx_client.close()
+    extractFromDatabase()
 
     print("End of program")
     

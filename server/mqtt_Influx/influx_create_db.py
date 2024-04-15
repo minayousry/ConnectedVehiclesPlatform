@@ -33,8 +33,15 @@ def create_database(client):
     print(f"Database '{database_name}' is ready.")
 
 
-
+def createDatabase():
+    try:
+        client = InfluxDBClient(server_address, port)
+        create_database(client)
+        client.close()
+        return True
+    except Exception as e:
+        print(f"Error: {e}")
+        return False
+    
 if __name__ == "__main__":
-    client = InfluxDBClient(server_address, port)
-    create_database(client)
-    client.close()
+    createDatabase()

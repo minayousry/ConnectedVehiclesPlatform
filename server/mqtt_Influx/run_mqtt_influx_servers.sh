@@ -17,6 +17,3 @@ sudo systemctl enable mosquitto
 
 sleep 5
 
-# Create the database if it doesn't exist
-python3 create_db.py
-

@@ -7,7 +7,6 @@ import pandas as pd
 def createExcelFile(obd2_data_frame,generation_path):
 
     try:
-        print(obd2_data_frame)
         if(type(obd2_data_frame['tx_time'].iloc[0]) == str):
             obd2_data_frame['tx_time'] = pd.to_datetime(obd2_data_frame['tx_time'], format='%Y-%m-%d %H:%M:%S')
         
