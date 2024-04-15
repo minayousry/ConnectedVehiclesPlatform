@@ -7,6 +7,7 @@ import os
 import Kafka_GreenPlum.greenplum_create_db as gp_db
 import mqtt_Influx.influx_create_db as influx_db
 import qpid_cassandra.cassandra_create_db as cassandra_db
+import webSockets_Postgresql.postgresql_create_db as postgresql_db
 
 
 import Kafka_GreenPlum.fleet_kafka_GP_run as kafka_gp
@@ -162,8 +163,15 @@ if __name__ == '__main__':
         
         
     elif server_tech == "websocket_postgresql":
-        comm_process = websocket_postgresql.websocket_process
-        database_process = websocket_postgresql.postgresql_process
+        bash_script_path = "./webSockets_Postgresql/run_ws_postgresql_servers.sh"
+        database_create_func = postgresql_db.createDatabase
+        comm_process = websocket_postgresql.websocketServerProcess
+        database_process = websocket_postgresql.storeInDatabase
+        database_extract_func = websocket_postgresql.extractFromDatabase
+        generation_path = "./webSockets_Postgresql/"
+        
+        
+        
     elif server_tech == "websocket_redis":
         comm_process = websocket_redis.websocket_process
         database_process = websocket_redis.redis_process

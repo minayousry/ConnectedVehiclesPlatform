@@ -55,11 +55,15 @@ def clearTable(conn,cursor):
     except Exception as e:
         print(f"An error occurred: {e}")
         
-def create_database(connection):
+def createDatabase():
+    
+    connection = psycopg2.connect(host=server_address, port=port, user=username, password=password,dbname=default_database_name)
     
     cursor = connection.cursor()
     
     database_exist = False
+    
+    result = True
     
     try:
         # Check if the database exists
@@ -113,13 +117,17 @@ def create_database(connection):
             connection.commit()
         
     except psycopg2.Error as e:
+        result = False
         print("Error:", e)
     
     finally:
         # Close cursor and connection
         cursor.close()
         connection.close()
+        
+    return result
 
 if __name__ == "__main__":
-    connection = psycopg2.connect(host=server_address, port=port, user=username, password=password,dbname=default_database_name)
-    create_database(connection)
+    createDatabase()
+    
+

@@ -143,63 +143,33 @@ def storeInDatabase(queue):
                 records_to_insert = []
 
     finally:
-        calculateTimeDifference(conn,cursor)
         closeDatabaseConnection(conn,cursor)
 
 
-def calculateTimeDifference(conn,cursor):
 
-    # SQL query to calculate the time difference in seconds
-    query = f"""
-        SELECT id, tx_time, storage_time,
-        EXTRACT(EPOCH FROM (storage_time - tx_time)) AS time_difference_seconds
-        FROM {database_table};
-    """
-
-    try:
-        # Execute the query
-        cursor.execute(query)
-
-        # Fetch and print the results
-        results = cursor.fetchall()
-
-        for row in results:
-            time_diff_list.append(row[3])          
-            #print(f"ID: {row[0]}, TX Time: {row[1]}, Storage Time: {row[2]}, Time Difference (seconds): {row[3]}")
-
-    except Exception as e:
-
-        print(f"Failed to execute select query: {e}")
     
-def createExcelFile():
+def extractFromDatabase():
 
     conn,cursor = connectToDatabase()
 
     # Define your SQL query
     query = f"""
-    SELECT vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
-    lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
-    co2_consumption, deceleration, storage_time, 
-    EXTRACT(EPOCH FROM (storage_time - tx_time)) AS time_difference_seconds
-    FROM {database_table};
-    """
+            SELECT vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
+            lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
+            co2_consumption, deceleration, storage_time 
+            FROM {database_table};
+            """
 
     # Execute the query and fetch all data
     df = pd.read_sql_query(query, conn)
 
-    df.columns = ['VehicleId', 'Tx_DateTime', 'x_pos', 'y_pos', 'gps_lon', 'gps_lat',
+    df.columns = ['VehicleId', 'tx_time', 'x_pos', 'y_pos', 'gps_lon', 'gps_lat',
                   'Speed', 'RoadID', 'LaneId', 'Displacement', 'TurnAngle', 'Acceleration',
-                  'FuelConsumption', 'Co2Consumption', 'Deceleration', 'database_storage_time',"time_difference_in_secs"]
+                  'FuelConsumption', 'Co2Consumption', 'Deceleration', 'storage_time']
 
-    try:
-        #received_msgs.append(time_diff_list)
-        # Generate Excel file
-        df.to_excel("obd2_data_report.xlsx", index=False)
+    closeDatabaseConnection(conn,cursor)
     
-    except Exception as e:
-            print(f"Failed to create excel file: {e}")
-    finally:
-        closeDatabaseConnection(conn,cursor)
+    return df
 
 def closeDatabaseConnection(cursor,conn):
     # Close the cursor and connection
@@ -223,5 +193,5 @@ if __name__ == "__main__":
     queue.put("STOP")
     db_process.join()
 
-    createExcelFile()
+    extractFromDatabase()
     
