@@ -7,7 +7,7 @@ from kafka import KafkaProducer
 import json
 
 # Configuration for connecting to Kafka server
-kafka_server = '34.32.165.88:9092'  # this to the Kafka server address
+kafka_server = '34.90.73.165:9092'  # this to the Kafka server address
 topic_name = 'OBD2_data'
 
 # Confiurations for SUMO
@@ -20,39 +20,43 @@ def getdatetime():
     return DATIME
 
 def runScenario(producer):
-        
-    traci.start(sumoCmd)
-    while traci.simulation.getMinExpectedNumber() > 0:
+    
+    try:    
+        traci.start(sumoCmd)
+        while traci.simulation.getMinExpectedNumber() > 0:
 
-        traci.simulationStep()
-        vehicles = traci.vehicle.getIDList()
+            traci.simulationStep()
+            vehicles = traci.vehicle.getIDList()
 
-        for i in range(0,len(vehicles)):
-            #Function descriptions
-            #https://sumo.dlr.de/docs/TraCI/Vehicle_Value_Retrieval.html
-            #https://sumo.dlr.de/pydoc/traci._vehicle.html
-            vehid = vehicles[i]
-            x_pos, y_pos = traci.vehicle.getPosition(vehicles[i])
-            gps_lon, gps_lat = traci.simulation.convertGeo(x_pos, y_pos)
-            spd = round(traci.vehicle.getSpeed(vehicles[i])*3.6,2) #Convert m/s to km/h
-            edge = traci.vehicle.getRoadID(vehicles[i])
-            lane = traci.vehicle.getLaneID(vehicles[i])
-            displacement = round(traci.vehicle.getDistance(vehicles[i]),2) #distance to starting point
-            turnAngle = round(traci.vehicle.getAngle(vehicles[i]),2) #degree within last step
-            acc = round(traci.vehicle.getAcceleration(vehicles[i]),2)
-            fuel_cons = round(traci.vehicle.getFuelConsumption(vehicles[i]),2)
-            co2_cons = round(traci.vehicle.getCO2Emission(vehicles[i]),2)
-            dece = round(traci.vehicle.getDecel(vehicles[i]),2)
+            for i in range(0,len(vehicles)):
+                #Function descriptions
+                #https://sumo.dlr.de/docs/TraCI/Vehicle_Value_Retrieval.html
+                #https://sumo.dlr.de/pydoc/traci._vehicle.html
+                vehid = vehicles[i]
+                x_pos, y_pos = traci.vehicle.getPosition(vehicles[i])
+                gps_lon, gps_lat = traci.simulation.convertGeo(x_pos, y_pos)
+                spd = round(traci.vehicle.getSpeed(vehicles[i])*3.6,2) #Convert m/s to km/h
+                edge = traci.vehicle.getRoadID(vehicles[i])
+                lane = traci.vehicle.getLaneID(vehicles[i])
+                displacement = round(traci.vehicle.getDistance(vehicles[i]),2) #distance to starting point
+                turnAngle = round(traci.vehicle.getAngle(vehicles[i]),2) #degree within last step
+                acc = round(traci.vehicle.getAcceleration(vehicles[i]),2)
+                fuel_cons = round(traci.vehicle.getFuelConsumption(vehicles[i]),2)
+                co2_cons = round(traci.vehicle.getCO2Emission(vehicles[i]),2)
+                dece = round(traci.vehicle.getDecel(vehicles[i]),2)
 
-            #Packing the vehicle data
-            veh_data = [vehid,getdatetime(),x_pos,y_pos,
-                        gps_lon,gps_lat,spd,edge,lane, 
-                        displacement,turnAngle,acc,
-                        fuel_cons,co2_cons,dece]
-                        
-            producer.send(topic_name, value=veh_data)
+                #Packing the vehicle data
+                veh_data = [vehid,getdatetime(),x_pos,y_pos,
+                            gps_lon,gps_lat,spd,edge,lane, 
+                            displacement,turnAngle,acc,
+                            fuel_cons,co2_cons,dece]
+                     
+                producer.send(topic_name, value=veh_data)
                         
         traci.close()
+        
+    except Exception as e:
+        print(f"Error: {e}")
 
 
 if __name__ == '__main__':

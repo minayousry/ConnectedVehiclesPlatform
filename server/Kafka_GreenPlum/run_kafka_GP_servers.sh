@@ -23,6 +23,9 @@ export COORDINATOR_DATA_DIRECTORY=/data/coordinator/gpseg-1
 
 # Start Greenplum
 echo "Starting Greenplum Database..."
-gpstart -a
+gpstart -a &
+
+# Wait a bit for Kafka to fully start
+sleep 5
 
 echo "All services started."
