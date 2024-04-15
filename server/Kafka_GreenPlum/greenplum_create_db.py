@@ -115,6 +115,8 @@ def createDatabase():
         print(f"An error occurred: {e}")
         return False
 
-createDatabase()
+
+if __name__ == "__main__":
+    createDatabase()
     
     

@@ -6,6 +6,7 @@ import os
 
 import Kafka_GreenPlum.greenplum_create_db as gp_db
 import mqtt_Influx.influx_create_db as influx_db
+import qpid_cassandra.cassandra_create_db as cassandra_db
 
 
 import Kafka_GreenPlum.fleet_kafka_GP_run as kafka_gp
@@ -94,9 +95,11 @@ def setKafkaIpAddress(file_path,search_text,new_text):
 
 def createReport(database_extract_func,generation_path):
     
+    print("Creating report...")
     extracted_df = database_extract_func()
     
     if extracted_df is not None:
+        print("Creating excel file...")
         server_utilities.createExcelFile(extracted_df,generation_path)
     
 
@@ -150,8 +153,14 @@ if __name__ == '__main__':
         
         
     elif server_tech == "qpid_cassandra":
+        bash_script_path = "./qpid_cassandra/run_qpid_cassandra_servers.sh"
+        database_create_func = cassandra_db.createDatabase
         comm_process = qpid_cassandra.receiverProcess
-        database_process = qpid_cassandra.extractFromDatabase
+        database_process = qpid_cassandra.databaseProcess
+        database_extract_func = qpid_cassandra.extractFromDatabase
+        generation_path = "./qpid_cassandra/"
+        
+        
     elif server_tech == "websocket_postgresql":
         comm_process = websocket_postgresql.websocket_process
         database_process = websocket_postgresql.postgresql_process
@@ -163,8 +172,10 @@ if __name__ == '__main__':
         exit(1)
  
     try:
-        #result = runServers(bash_script_path)
-        result = True
+        #result = True
+        result = runServers(bash_script_path)
+        
+        
         if result:
             print("Servers are running.")
             result = database_create_func()

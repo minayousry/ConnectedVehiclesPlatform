@@ -17,8 +17,4 @@ sleep 7
 
 echo "Finished running cassandra Server"
 
-#Create database if doeesn't exist
-#python3 create_db.py
-
-
 echo "All services started."

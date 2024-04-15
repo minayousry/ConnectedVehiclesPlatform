@@ -38,7 +38,7 @@ def create_keyspace_and_table(cluster):
         fuel_consumption double,
         co2_consumption double,
         deceleration double,
-        storage_time TIMESTAMP
+        storage_time timestamp
     );
     """
     
@@ -55,7 +55,16 @@ def drop_keyspace(cluster):
     print(f"Keyspace '{keyspace_name}' has been dropped.")
     
 
+
+def createDatabase():
+    try:
+        cluster = Cluster([server_address])
+        create_keyspace_and_table(cluster)
+        cluster.shutdown()
+        return True
+    except Exception as e:
+        print("error while creating database.")
+        return False
+
 if __name__ == "__main__":
-    cluster = Cluster([server_address])
-    drop_keyspace(cluster)
-    create_keyspace_and_table(cluster)
+    createDatabase()

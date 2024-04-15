@@ -10,7 +10,7 @@ from proton.reactor import Container
 import threading
 import queue
 
-server_url = 'amqp://34.147.94.95:8888'
+server_url = 'amqp://34.91.80.130:8888'
 address = 'obd2_data_queue' 
 
 # Confiurations for SUMO

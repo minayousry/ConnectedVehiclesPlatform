@@ -58,7 +58,6 @@ class Receiver(MessagingHandler):
         self.last_message_time = time.time()
         
     def on_timer_task(self, event):
-        print("onTimerTask func called")
         if not self.messages_received:
             print("No messages received yet.")
 
@@ -111,6 +110,7 @@ def extractFromDatabase():
         cluster = Cluster(['localhost'])
         session = cluster.connect(keyspace_name)
         
+
         select_query = f"""SELECT vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
                             lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
                             co2_consumption, deceleration, storage_time 
@@ -119,8 +119,10 @@ def extractFromDatabase():
 
         # Execute query and fetch data
         rows = session.execute(select_query)
-        
+
         result = pd.DataFrame(rows.current_rows)
+        
+        print(result.head())
 
         print("succeded to extract info from database.")
     
@@ -133,15 +135,6 @@ def extractFromDatabase():
     
     return result
 
-def createReport():
-    extracted_df = extractFromDatabase()
-    
-    if extracted_df is not None:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        parent_dir = os.path.dirname(current_dir)
-        sys.path.append(parent_dir)
-        import server_utilities
-        server_utilities.createExcelFile(extracted_df)
 
 if __name__ == "__main__":
     
@@ -168,6 +161,7 @@ if __name__ == "__main__":
     
     print("All processes have been stopped.")
     
-    createReport()
+
+    extractFromDatabase()
     
     
