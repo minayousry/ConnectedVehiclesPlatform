@@ -13,7 +13,7 @@ async def dbWriter(queue):
         
     # Connect to Redis using the new aioredis 2.0 syntax
     redis = await aioredis.from_url('redis://localhost', encoding="utf-8", decode_responses=True)
-    await redis.flushdb()
+    
     
     while True:
         message = queue.get()
@@ -90,18 +90,18 @@ async def fetchDataFromRedis():
 
     return data
 
-def createExcelFile():
+def extractFromDatabase():
     
-    print("creating excel sheet")
 
     data = asyncio.run(fetchDataFromRedis())
-    
-    
     
     data_list = []
     
     for elm in data:
-        elm_list = elm['Message'].replace("[", "").replace("]", "").replace("\"", "").split(',')
+        elm_list = elm['Message'].replace("[", "").replace("]", "").replace("\"", "").strip().split(',')
+        
+        
+        """ 
         tx_time = elm_list[1].strip()
         storage_time = elm_list[-1].strip()
         
@@ -119,19 +119,22 @@ def createExcelFile():
 
         
         elm_list.append(time_diff_str)
+        """
         data_list.append(elm_list)
         
         
-    cols_names = ['VehicleId', 'Tx_DateTime', 'x_pos', 'y_pos', 'gps_lon', 'gps_lat',
+    cols_names = ['VehicleId', 'tx_time', 'x_pos', 'y_pos', 'gps_lon', 'gps_lat',
                   'Speed', 'RoadID', 'LaneId', 'Displacement', 'TurnAngle', 'Acceleration',
-                  'FuelConsumption', 'Co2Consumption', 'Deceleration','storage_time','time_difference_in_sec']
+                  'FuelConsumption', 'Co2Consumption', 'Deceleration','storage_time']
     
     
     # Convert the data to a pandas DataFrame.
     df = pd.DataFrame(data_list,columns=cols_names)
     
-    # Write the DataFrame to an Excel file.
-    df.to_excel('obd2_data_report.xlsx', index=False)
+    df["tx_time"] = df['tx_time'].str.strip()
+    df["storage_time"] = df['storage_time'].str.strip()
+    
+    return df
     
 
 if __name__ == "__main__":
@@ -148,4 +151,4 @@ if __name__ == "__main__":
     db_process.join()
     ws_process.terminate()
     
-    createExcelFile()
+    extractFromDatabase()

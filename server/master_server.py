@@ -8,6 +8,7 @@ import Kafka_GreenPlum.greenplum_create_db as gp_db
 import mqtt_Influx.influx_create_db as influx_db
 import qpid_cassandra.cassandra_create_db as cassandra_db
 import webSockets_Postgresql.postgresql_create_db as postgresql_db
+import webSockets_Redis.redis_create_db as redis_db
 
 
 import Kafka_GreenPlum.fleet_kafka_GP_run as kafka_gp
@@ -32,8 +33,6 @@ def runServers(bash_script_path):
     # Check if the script ran successfully
     if result.returncode == 0:
         print("Bash script executed successfully")
-        print("Output:")
-        print(result.stdout)
         result = True
     else:
         print("Error executing Bash script")
@@ -173,8 +172,14 @@ if __name__ == '__main__':
         
         
     elif server_tech == "websocket_redis":
-        comm_process = websocket_redis.websocket_process
-        database_process = websocket_redis.redis_process
+        bash_script_path = "./webSockets_Redis/run_ws_redis_servers.sh"
+        database_create_func = redis_db.createDatabase
+        comm_process = websocket_redis.websocketServerProcess
+        database_process = websocket_redis.dbWriterProcess
+        database_extract_func = websocket_redis.extractFromDatabase
+        generation_path = "./webSockets_Redis/"
+        
+        
     else:
         print("Invalid server technology. Please select one of the following: mqtt_influx, kafka_greenplum, qpid_cassandra, websocket_postgresql ot websocket_redis")
         exit(1)
