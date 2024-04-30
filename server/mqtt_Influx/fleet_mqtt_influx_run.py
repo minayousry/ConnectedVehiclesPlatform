@@ -7,20 +7,19 @@ import pandas as pd
 import sys
 import os
 
-
 database_name = "obd2_database"
 mqtt_broker_address = "localhost"
 port_no = 1883
-
+mqtt_comm_timeout = 20
+socket_closed = False
 
 # MQTT callback functions
 def on_connect(client, userdata, flags, rc):
-    print(f"Connected with result code {rc}")
+    print("Listening for MQTT messages...")
     client.subscribe("mqtt/topic")
 
 
 def on_message(client, userdata, msg,queue):
-    #print(f"Received message: {msg.payload.decode()}")
     data_list = msg.payload.decode().split(',')
     queue.put(data_list)  # Put the data into the queue
     
@@ -54,9 +53,9 @@ def mqtt_process(queue):
         time_diff = current_time - start_time
         #print(time_diff)
         
-        if (time_diff > 20) and (queue.empty()):
+        if (queue.empty() and ((time_diff > mqtt_comm_timeout) or socket_closed)):
             mqtt_client.loop_stop()
-            print("finished")
+            print("MQTT communication timeout")
             queue.put("STOP")
             mqtt_client.loop_stop()
             break
@@ -78,7 +77,8 @@ def influx_process(queue):
     while True:
         data_list = queue.get()  # Get the data from the queue
         if data_list is not None and data_list != "STOP":
-            timestamp  = datetime.now() 
+            #timestamp  = datetime.now() 
+            #formatted_time = timestamp.strftime("%Y-%m-%d %H:%M:%S .%f")
             measurement = {
                 "measurement": str(msg_id),
                 "fields": {
@@ -97,7 +97,7 @@ def influx_process(queue):
                     "fuel_consumption": float(data_list[12]),
                     "co2_consumption": float(data_list[13]),
                     "deceleration": float(data_list[14].replace(']','')),
-                    "storage_time": str(timestamp)
+                    #"storage_time": str(formatted_time)
                 }
             }
             
@@ -136,9 +136,19 @@ def extractFromDatabase():
     df = pd.DataFrame(dict_list)
     
     df['tx_time'] = df['tx_time'].str.replace('\"','').str.strip()
-    df['storage_time'] = df['storage_time'].str[:-7].str.replace('\"','').str.strip()
-
     
+    
+    #print(df['storage_time'])
+    #df['storage_time'] = df['storage_time'].str[:-7].str.replace('\"','').str.strip()
+    
+    print("Heeeeeeeeere")
+    
+    # Convert 'time' column to datetime format with timezone specifier 'Z'
+    df['storage_time'] = pd.to_datetime(df['time'], format="%Y-%m-%dT%H:%M:%S.%fZ")
+    
+    df['storage_time'] = pd.to_datetime(df['storage_time'], format='%Y-%m-%d %H:%M:%S.%f')
+
+    print(df['storage_time'].iloc[0])
     
     influx_client.close()
     

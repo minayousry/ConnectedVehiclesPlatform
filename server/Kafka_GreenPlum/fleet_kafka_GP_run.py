@@ -10,7 +10,7 @@ import psycopg2.extras
 # Configuration for connecting to your Kafka server
 kafka_server = '127.0.0.1:9092'  # this to the Kafka server address
 topic_name = 'OBD2_data'
-consumer_timeout_in_ms = 20000
+consumer_timeout_in_ms = 30000
 received_msgs = []
 time_diff_list = []
 
@@ -26,6 +26,9 @@ db_batch_size = 100
 
 # Kafka Consumer to receive messages from the 'test' topic
 def kafkaConsumer(queue):
+    
+    exit_code = 0
+    
     try:
         consumer = KafkaConsumer(topic_name,
             bootstrap_servers=[kafka_server],
@@ -40,11 +43,13 @@ def kafkaConsumer(queue):
         for message in consumer:
             received_msg = message.value
             queue.put(received_msg)
+
             
     except Exception as e:
         print(f"Kafka consumer error: {e}")
-    finally:
-        print("finally")
+        exit_code = 1
+        
+    exit(exit_code)
 
 
 def connectToDatabase():
@@ -71,6 +76,8 @@ def insertRecords(conn, records):
 
 
 def storeInDatabase(queue):
+    
+    exit_code = 0
 
     conn,cursor = connectToDatabase()
 
@@ -93,9 +100,14 @@ def storeInDatabase(queue):
             if len(records_to_insert) >= db_batch_size:  # Adjust batch size as appropriate
                 insertRecords(conn, records_to_insert)
                 records_to_insert = []
+    except Exception as e:
+        print(f"An error occurred while inserting data into Database: {e}")
+        exit_code = 1
 
     finally:
         closeDatabaseConnection(conn,cursor)
+    
+    exit(exit_code)
 
 
 def closeDatabaseConnection(cursor,conn):
@@ -123,8 +135,6 @@ def extractFromDatabase():
 
     closeDatabaseConnection(conn,cursor)
     
-    print(df)
-
     return df
 
 

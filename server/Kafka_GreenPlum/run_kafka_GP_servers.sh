@@ -12,7 +12,7 @@ echo "Starting Kafka..."
 kafka-server-start.sh $HOME/kafka/config/server.properties &
 
 # Wait a bit for Kafka to fully start
-sleep 5
+sleep 10
 
 # Setup Greenplum environment
 echo "Setting up Greenplum environment..."
