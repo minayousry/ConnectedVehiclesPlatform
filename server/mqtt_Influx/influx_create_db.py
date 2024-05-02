@@ -11,17 +11,13 @@ def resetDatabase(client):
     dblist = client.get_list_database()
     
     #check if database_name exist
-    if any(db['name'] == database_name for db in dblist):
-        
+    if any(db['name'] == database_name for db in dblist): 
         print("Dropping database...")
         client.drop_database(database_name)
-    else:
-        client.create_database(database_name)
-        client.switch_database(database_name)
-        print(f"Database '{database_name}' created.")
-        
-    print(f"Database '{database_name}' is ready.")
-
+    
+    client.create_database(database_name)
+    client.switch_database(database_name)
+    print(f"Database '{database_name}' created.")
 
 def createDatabase():
     try:

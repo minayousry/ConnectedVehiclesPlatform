@@ -8,10 +8,13 @@ import sys
 import os
 
 database_name = "obd2_database"
+db_batch_size = 100
+
 mqtt_broker_address = "localhost"
 port_no = 1883
 mqtt_comm_timeout = 20
 socket_closed = False
+
 
 # MQTT callback functions
 def on_connect(client, userdata, flags, rc):
@@ -34,7 +37,7 @@ def on_disconnect(client, userdata, rc):
     
 
 # MQTT process
-def mqtt_process(queue):
+def mqttProcess(queue):
     mqtt_client = mqtt.Client()
     mqtt_client.on_connect = on_connect
     mqtt_client.on_message = lambda client, userdata, msg: on_message(client, userdata, msg, queue)
@@ -63,10 +66,59 @@ def mqtt_process(queue):
             # Reset the start time
             start_time = time.time()
     
+def getMeasurement(msg_id,data_list):
     
+    measurement = {
+        "measurement": str(msg_id),
+        "fields": {
+            "vehicle_id": data_list[0].replace('[',''),
+            "tx_time": data_list[1],
+            "x_pos": float(data_list[2]),
+            "y_pos": float(data_list[3]),
+            "gps_lon": float(data_list[4]),
+            "gps_lat": float(data_list[5]),
+            "speed": float(data_list[6]),
+            "road_id": data_list[7],
+            "lane_id": data_list[8],
+            "displacement": float(data_list[9]),
+            "turn_angle": float(data_list[10]),
+            "acceleration": float(data_list[11]),
+            "fuel_consumption": float(data_list[12]),
+            "co2_consumption": float(data_list[13]),
+            "deceleration": float(data_list[14].replace(']','')),
+            #"storage_time": str(formatted_time)
+        }
+    }
+    
+    return measurement    
 
 # InfluxDB process
-def influx_process(queue):
+def influxBatchProcess(queue):
+    
+    # Set up InfluxDB client
+    influx_client = InfluxDBClient(host='localhost', port=8086)
+    influx_client.switch_database(database_name)
+    
+    msg_id = 0
+    measurement_body = []
+    while True:
+        data_list = queue.get()  # Get the data from the queue
+        if data_list is not None and data_list != "STOP":   
+            measurement = getMeasurement(msg_id,data_list)
+            measurement_body.append(measurement)
+            msg_id += 1
+            
+            if msg_id % db_batch_size == 0:
+                influx_client.write_points(measurement_body)
+                measurement_body = []
+        else:
+            # End the process
+            break
+    influx_client.write_points(measurement_body)
+    influx_client.close()
+    
+    
+def influxProcess(queue):
     
     # Set up InfluxDB client
     influx_client = InfluxDBClient(host='localhost', port=8086)
@@ -77,37 +129,15 @@ def influx_process(queue):
     while True:
         data_list = queue.get()  # Get the data from the queue
         if data_list is not None and data_list != "STOP":
-            #timestamp  = datetime.now() 
-            #formatted_time = timestamp.strftime("%Y-%m-%d %H:%M:%S .%f")
-            measurement = {
-                "measurement": str(msg_id),
-                "fields": {
-                    "vehicle_id": data_list[0].replace('[',''),
-                    "tx_time": data_list[1],
-                    "x_pos": float(data_list[2]),
-                    "y_pos": float(data_list[3]),
-                    "gps_lon": float(data_list[4]),
-                    "gps_lat": float(data_list[5]),
-                    "speed": float(data_list[6]),
-                    "road_id": data_list[7],
-                    "lane_id": data_list[8],
-                    "displacement": float(data_list[9]),
-                    "turn_angle": float(data_list[10]),
-                    "acceleration": float(data_list[11]),
-                    "fuel_consumption": float(data_list[12]),
-                    "co2_consumption": float(data_list[13]),
-                    "deceleration": float(data_list[14].replace(']','')),
-                    #"storage_time": str(formatted_time)
-                }
-            }
-            
-            measurement_body.append(measurement)
+            measurement = getMeasurement(msg_id,data_list)
+            influx_client.write_points([measurement])
             msg_id += 1
         else:
             # End the process
             break
-    influx_client.write_points(measurement_body)
-    influx_client.close()
+    
+    influx_client.close()    
+    
         
 def extractFromDatabase():
     
@@ -141,7 +171,6 @@ def extractFromDatabase():
     #print(df['storage_time'])
     #df['storage_time'] = df['storage_time'].str[:-7].str.replace('\"','').str.strip()
     
-    print("Heeeeeeeeere")
     
     # Convert 'time' column to datetime format with timezone specifier 'Z'
     df['storage_time'] = pd.to_datetime(df['time'], format="%Y-%m-%dT%H:%M:%S.%fZ")
@@ -163,11 +192,11 @@ if __name__ == '__main__':
     data_queue = multiprocessing.Queue()
 
     # Create and start the MQTT process
-    mqtt_proc = multiprocessing.Process(target=mqtt_process,args=(data_queue,))
+    mqtt_proc = multiprocessing.Process(target=mqttProcess,args=(data_queue,))
     mqtt_proc.start()
 
     # Create and start the InfluxDB process
-    influx_proc = multiprocessing.Process(target=influx_process,args=(data_queue,))
+    influx_proc = multiprocessing.Process(target=influxProcess,args=(data_queue,))
     influx_proc.start()
 
 

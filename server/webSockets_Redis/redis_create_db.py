@@ -7,6 +7,7 @@ async def createDatabase():
         redis = await aioredis.from_url('redis://localhost', encoding="utf-8", decode_responses=True)
         await redis.flushdb()
         await redis.close()
+        print("Database created successfully.")
         return True
     except Exception as e:
         print(f"Error during database operation: {e}")
@@ -14,4 +15,4 @@ async def createDatabase():
 
 
 if __name__ == "__main__":
-    createDatabase()
+    asyncio.run(createDatabase())

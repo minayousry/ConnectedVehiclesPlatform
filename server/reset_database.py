@@ -14,26 +14,26 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     # Add a string argument
-    parser.add_argument('serevr_technology', type=str, help='select which technology to use for the server.')
+    parser.add_argument('database_technology', type=str, help='select which database tech to use for the server.')
 
     # Parse the arguments
     args = parser.parse_args()
 
     # Access the parsed argument
-    server_tech = args.serevr_technology
+    database_technology = args.database_technology
     
-    if server_tech == "kafka_greenplum":
+    if database_technology == "greenplum":
         database_create_func = gp_db.createDatabase
-    elif server_tech == "mqtt_influx":
+    elif database_technology == "influx":
         database_create_func = influx_db.createDatabase
-    elif server_tech == "qpid_cassandra":
+    elif database_technology == "cassandra":
         database_create_func = cassandra_db.createDatabase
-    elif server_tech == "websocket_postgresql":
+    elif database_technology == "postgresql":
         database_create_func = postgresql_db.createDatabase  
-    elif server_tech == "websocket_redis":
+    elif database_technology == "redis":
         database_create_func = redis_db.createDatabase
     else:
-        print("Invalid server technology. Please select one of the following: mqtt_influx, kafka_greenplum, qpid_cassandra, websocket_postgresql ot websocket_redis")
+        print("Invalid server technology. Please select one of the following: influx, greenplum, cassandra, postgresql or redis")
         exit(1)
  
     try:

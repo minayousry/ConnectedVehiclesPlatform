@@ -24,6 +24,7 @@ keyspace_name = "obd2_database"
 table_name = "obd2_data"
 server_address = '127.0.0.1'
 
+db_batch_size = 100
 
 class Receiver(MessagingHandler):
     
@@ -38,7 +39,7 @@ class Receiver(MessagingHandler):
     def on_connection_closed(self, event):
         print("Connection is closed")
         #end the connection
-        queue.put("STOP")
+        self.queue.put("STOP")
         if self.container:
             self.container.stop()
         
@@ -98,8 +99,58 @@ def databaseProcess(queue):
         print(f"Error during database operation: {e}")
     finally:
         cluster.shutdown()
-
         
+
+def insertBatch(session, batch, table_name):
+    insert_query = f"INSERT INTO {table_name} (id, vehicle_id, tx_time, x_pos, y_pos, \
+                                               gps_lon, gps_lat, speed, road_id, lane_id, \
+                                               displacement, turn_angle, acceleration, fuel_consumption, co2_consumption, \
+                                               deceleration, storage_time) \
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+
+    timestamp = datetime.now()
+
+    for message in batch:
+        session.execute(insert_query, (uuid4(), message[0], message[1], message[2], message[3], \
+                                        message[4], message[5], message[6], message[7], message[8], \
+                                        message[9], message[10], message[11], message[12], message[13], \
+                                        message[14], timestamp))      
+
+def databaseBatchProcess(queue, keyspace_name, table_name):
+    try:
+        cluster = Cluster(['localhost'])
+        session = cluster.connect(keyspace_name)
+
+        batch_count = 0
+        batch = []
+
+        while True:
+            message = queue.get()
+
+            if message is None or message == "STOP":
+                print("Stopping the database process...")
+                break
+
+            # Append message to the batch
+            batch.append(message)
+
+            # Check if batch size is reached
+            if len(batch) >= db_batch_size:
+                insertBatch(session, batch, table_name)
+                batch_count += 1
+                batch = []
+
+        # Insert remaining records if any
+        if batch:
+            insertBatch(session, batch, table_name)
+            batch_count += 1
+
+    except Exception as e:
+        print(f"Error during database operation: {e}")
+    finally:
+        cluster.shutdown()
+
+  
 def extractFromDatabase():
     
     result = None
@@ -122,7 +173,6 @@ def extractFromDatabase():
 
         result = pd.DataFrame(rows.current_rows)
         
-        print(result.head())
 
         print("succeded to extract info from database.")
     

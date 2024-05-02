@@ -8,6 +8,18 @@ import requests
 def createExcelFile(obd2_data_frame,generation_path):
 
     try:
+        if(obd2_data_frame is None):
+            print("Error:OBD2 Dataframe is None.")
+            return
+        
+        if(obd2_data_frame.empty):
+            print("Error:OBD2 Dataframe is empty.")
+            return
+
+        if(len(obd2_data_frame.columns) == 0):
+            print("Error:Dataframe has no columns.")
+            return
+        
         if type(obd2_data_frame['tx_time'].iloc[0]) == str:
             print("Converting tx time to datetime")
             obd2_data_frame['tx_time'] = pd.to_datetime(obd2_data_frame['tx_time'], format='%Y-%m-%d %H:%M:%S.%f')

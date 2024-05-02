@@ -81,14 +81,14 @@ if __name__ == '__main__':
     
     
     if server_tech == "kafka_greenplum":
-        comm_process = kafka_gp.kafkaConsumer
-        database_process = kafka_gp.storeInDatabase
+        comm_process = kafka_gp.kafkaConsumerProcess
+        database_process = kafka_gp.storeInDatabaseProcess
         database_extract_func = kafka_gp.extractFromDatabase
         generation_path = "./Kafka_GreenPlum/"
         
     elif server_tech == "mqtt_influx":
-        comm_process = mqtt_influx.mqtt_process
-        database_process = mqtt_influx.influx_process
+        comm_process = mqtt_influx.mqttProcess
+        database_process = mqtt_influx.influxProcess
         database_extract_func = mqtt_influx.extractFromDatabase
         generation_path = "./mqtt_Influx/"
         
@@ -102,10 +102,9 @@ if __name__ == '__main__':
         
     elif server_tech == "websocket_postgresql":
         comm_process = websocket_postgresql.websocketServerProcess
-        database_process = websocket_postgresql.storeInDatabase
+        database_process = websocket_postgresql.storeInDatabaseProcess
         database_extract_func = websocket_postgresql.extractFromDatabase
         generation_path = "./webSockets_Postgresql/"
-        
         
         
     elif server_tech == "websocket_redis":
@@ -116,7 +115,7 @@ if __name__ == '__main__':
         
         
     else:
-        print("Invalid server technology. Please select one of the following: mqtt_influx, kafka_greenplum, qpid_cassandra, websocket_postgresql ot websocket_redis")
+        print("Invalid server technology. Please select one of the following: mqtt_influx, kafka_greenplum, qpid_cassandra, websocket_postgresql or websocket_redis")
         exit(1)
  
     try:        

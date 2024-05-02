@@ -1,5 +1,6 @@
     
 import argparse
+import asyncio
 import subprocess
 
 
@@ -110,7 +111,7 @@ if __name__ == '__main__':
         bash_script_path = "./webSockets_Redis/run_ws_redis_servers.sh"
         database_create_func = redis_db.createDatabase
     else:
-        print("Invalid server technology. Please select one of the following: mqtt_influx, kafka_greenplum, qpid_cassandra, websocket_postgresql ot websocket_redis")
+        print("Invalid server technology. Please select one of the following: mqtt_influx, kafka_greenplum, qpid_cassandra, websocket_postgresql or websocket_redis")
         exit(1)
  
     try:
@@ -118,7 +119,10 @@ if __name__ == '__main__':
          
         if result:
             print("Servers are running.")
-            result = database_create_func()
+            if(server_tech == "websocket_redis"):
+                result = asyncio.run(database_create_func())
+            else:
+                result = database_create_func()
         else:
             print("Failed to run servers.")
             exit(1)
