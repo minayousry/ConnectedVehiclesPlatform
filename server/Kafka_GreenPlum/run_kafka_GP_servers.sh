@@ -5,14 +5,14 @@ echo "Starting Zookeeper..."
 zookeeper-server-start.sh $HOME/kafka/config/zookeeper.properties &
 
 # Wait a bit for Zookeeper to fully start
-sleep 5
+sleep 10
 
 # Start Kafka
 echo "Starting Kafka..."
 kafka-server-start.sh $HOME/kafka/config/server.properties &
 
 # Wait a bit for Kafka to fully start
-sleep 10
+sleep 30
 
 # Setup Greenplum environment
 echo "Setting up Greenplum environment..."
