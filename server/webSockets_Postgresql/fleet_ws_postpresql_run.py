@@ -31,9 +31,26 @@ def connectToDatabase():
 
     return conn,cursor
 
+def closeDatabaseConnection(cursor,conn):
+    # Close the cursor and connection
+    cursor.close()
+    conn.close()
 
-
-
+def insertRecord(conn, record):
+    cursor = conn.cursor()
+    try:
+        insert_query = f"""
+                        INSERT INTO {database_table} (
+                        vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
+                        lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
+                        co2_consumption, deceleration
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                        """
+        cursor.execute(insert_query,record)
+        conn.commit()
+    except Exception as e:
+        print(f"Failed to insert record {record} because of error {e}")
+        conn.rollback()  
 
 async def websocketServerHandler(websocket, path, queue):
     try:
@@ -101,23 +118,7 @@ def websocketServerProcess(queue):
 
 
 
-def insertRecord(conn, record):
-    cursor = conn.cursor()
-    try:
-        insert_query = f"""
-                        INSERT INTO {database_table} (
-                        vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
-                        lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
-                        co2_consumption, deceleration
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-                        """
-        print(record)
-        cursor.execute(insert_query, record)
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        print(f"Failed to insert record: {e}")
-        
+      
 
 def storeInDatabaseProcess(queue):
     
@@ -129,9 +130,7 @@ def storeInDatabaseProcess(queue):
             if data == "STOP":
                 print("Stopping the database process...")
                 break
-
-            # Assuming data is a tuple representing a single record
-            insertRecord(conn, data)
+            insertRecord(conn, eval(data))
     finally:
         closeDatabaseConnection(conn,cursor)
 
@@ -204,12 +203,10 @@ def extractFromDatabase():
     
     return df
 
-def closeDatabaseConnection(cursor,conn):
-    # Close the cursor and connection
-    cursor.close()
-    conn.close()
 
 
+
+ 
 if __name__ == "__main__":
     queue = Queue()
 
@@ -227,4 +224,3 @@ if __name__ == "__main__":
     db_process.join()
 
     extractFromDatabase()
-    
