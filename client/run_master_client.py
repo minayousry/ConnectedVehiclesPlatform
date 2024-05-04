@@ -85,8 +85,7 @@ if __name__ == '__main__':
     if result:
         cl_utl.resetMsgCount(client_tech) 
         if client_tech == "kafka":    
-            #kafka_cl.runKafkaClient(sumo_cmd,remote_machine_ip_addr)
-            x = 2
+            kafka_cl.runKafkaClient(sumo_cmd,remote_machine_ip_addr)
         elif client_tech == "mqtt":
             mqtt_cl.runMqttClient(sumo_cmd,remote_machine_ip_addr)
          
