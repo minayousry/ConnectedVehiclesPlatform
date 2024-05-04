@@ -6,19 +6,10 @@ import datetime
 import json
 import asyncio
 import websockets
-
-# Configuration for connecting to websockets server
-ws_server = '34.32.165.88:8765'  
+import client_utilities as cl_utl
 
 
-# Confiurations for SUMO
-sumoCmd = ["sumo", "-c", "osm.sumocfg"]
-
-def getdatetime():
-    utc_now = pytz.utc.localize(datetime.datetime.utcnow())
-    currentDT = utc_now.astimezone(pytz.timezone("Atlantic/Reykjavik"))
-    DATIME = currentDT.strftime("%Y-%m-%d %H:%M:%S")
-    return DATIME
+ws_port_no = "8765"
 
 
 async def wsSendData(websocket,message):
@@ -26,11 +17,11 @@ async def wsSendData(websocket,message):
     json_data = json.dumps(message)
     await websocket.send(json_data)
 
-async def runScenario():
+async def runScenario(sumo_cmd,ws_server):
     uri = f"ws://{ws_server}"
-
+    
     async with websockets.connect(uri) as websocket:
-        traci.start(sumoCmd)
+        traci.start(sumo_cmd)
         while traci.simulation.getMinExpectedNumber() > 0:
             traci.simulationStep()
             vehicles = traci.vehicle.getIDList()
@@ -53,18 +44,23 @@ async def runScenario():
                 dece = round(traci.vehicle.getDecel(vehicles[i]),2)
 
                 #Packing the vehicle data
-                veh_data = [vehid,getdatetime(),x_pos,y_pos,
+                veh_data = [vehid,cl_utl.getdatetime(),x_pos,y_pos,
                         gps_lon,gps_lat,spd,edge,lane, 
                         displacement,turnAngle,acc,
                         fuel_cons,co2_cons,dece]
                                     
                 await wsSendData(websocket,veh_data)
-
+                cl_utl.increaseMsgCount("ws")
         traci.close()
+    
+
+def runWsClient(sumo_cmd,remote_machine_ip_addr):
+    ws_server = remote_machine_ip_addr+":"+ws_port_no  
+    cl_utl.recordStartSimTime("ws")
+    asyncio.run(runScenario(sumo_cmd,ws_server))
+    cl_utl.recordEndSimTime("ws")
 
 
-if __name__ == '__main__':
-    asyncio.run(runScenario())
 
 
 

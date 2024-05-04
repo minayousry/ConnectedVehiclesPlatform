@@ -1,28 +1,19 @@
 import traci
 import time
 import traci.constants as tc
-import pytz
-import datetime
 from kafka import KafkaProducer
 import json
 
+import client_utilities as cl_utl
+
 # Configuration for connecting to Kafka server
-kafka_server = '34.90.73.165:9092'  # this to the Kafka server address
 topic_name = 'OBD2_data'
 
-# Confiurations for SUMO
-sumoCmd = ["sumo", "-c", "osm.sumocfg"]
 
-def getdatetime():
-    utc_now = pytz.utc.localize(datetime.datetime.utcnow())
-    currentDT = utc_now.astimezone(pytz.timezone("Atlantic/Reykjavik"))
-    DATIME = currentDT.strftime("%Y-%m-%d %H:%M:%S")
-    return DATIME
-
-def runScenario(producer):
+def runScenario(sumo_cmd,producer):
     
     try:    
-        traci.start(sumoCmd)
+        traci.start(sumo_cmd)
         while traci.simulation.getMinExpectedNumber() > 0:
 
             traci.simulationStep()
@@ -46,31 +37,35 @@ def runScenario(producer):
                 dece = round(traci.vehicle.getDecel(vehicles[i]),2)
 
                 #Packing the vehicle data
-                veh_data = [vehid,getdatetime(),x_pos,y_pos,
+                veh_data = [vehid,cl_utl.getdatetime(),x_pos,y_pos,
                             gps_lon,gps_lat,spd,edge,lane, 
                             displacement,turnAngle,acc,
                             fuel_cons,co2_cons,dece]
                      
-                producer.send(topic_name, value=veh_data)
-                        
+                producer.send(topic_name, value=veh_data)            
         traci.close()
         
     except Exception as e:
         print(f"Error: {e}")
 
 
-if __name__ == '__main__':
+def runKafkaClient(sumo_cmd,remote_machine_ip_addr):
+    
+    kafka_server = remote_machine_ip_addr + ':9092'  # this to the Kafka server address
+    
     # Initialize a Kafka producer
     producer = KafkaProducer(bootstrap_servers=[kafka_server],
                 value_serializer=lambda v: json.dumps(v).encode('utf-8'))
 
-    runScenario(producer)
+    runScenario(sumo_cmd,producer)
         
     # Ensure all messages are sent and then close the producer
     producer.flush()
     producer.close()
 
     print(f"Messages sent to topic '{topic_name}' on Kafka server at {kafka_server}")
+
+    
 
 
 

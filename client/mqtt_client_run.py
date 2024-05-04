@@ -6,8 +6,9 @@ import json
 import traci.constants as tc
 import paho.mqtt.client as mqtt
 
+import client_utilities as cl_utl
+
 # Configuration for connecting to MQTT broker
-mqtt_broker = '34.90.73.165'
 mqtt_port = 1883 
 mqtt_topic = 'mqtt/topic'
 
@@ -17,14 +18,14 @@ sumoCmd = ["sumo", "-c", "osm.sumocfg"]
 def getdatetime():
     utc_now = pytz.utc.localize(datetime.datetime.utcnow())
     currentDT = utc_now.astimezone(pytz.timezone("Atlantic/Reykjavik"))
-    DATIME = currentDT.strftime("%Y-%m-%d %H:%M:%S")
+    DATIME = currentDT.strftime("%Y-%m-%d %H:%M:%S.%f")
     return DATIME
 
 def on_connect(client, userdata, flags, rc):
     print("Connected to MQTT broker with result code " + str(rc))
 
-def runScenario(client):
-    traci.start(sumoCmd)
+def runScenario(sumo_cmd,client):
+    traci.start(sumo_cmd)
     try:
         while traci.simulation.getMinExpectedNumber() > 0:
             traci.simulationStep()
@@ -67,13 +68,17 @@ def runScenario(client):
     finally:
         traci.close()
 
-if __name__ == '__main__':
+def runMqttClient(sumo_cmd,remote_machine_ip_addr):
+    
+    mqtt_broker = remote_machine_ip_addr
+    print(mqtt_broker)
+    
     # Initialize an MQTT client
     client = mqtt.Client()
     client.on_connect = on_connect
     client.connect(mqtt_broker, mqtt_port, 60)
 
-    runScenario(client)
+    runScenario(sumo_cmd,client)
 
     client.disconnect()
 
