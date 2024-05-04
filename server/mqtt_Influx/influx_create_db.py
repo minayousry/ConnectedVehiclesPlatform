@@ -6,37 +6,25 @@ measurement_name = "obd2_data"
 server_address = '127.0.0.1'
 port = 8086
 
-def create_database(client):
+def resetDatabase(client):
     
     dblist = client.get_list_database()
     
     #check if database_name exist
-    if any(db['name'] == database_name for db in dblist):
-        
-         # Switch to the database
-        client.switch_database(database_name)
-        
-        # Fetch all measurements
-        measurements = client.query('SHOW MEASUREMENTS').get_points()
-        measurement_names = [measurement['name'] for measurement in measurements]
-
-        # Drop each measurement
-        for name in measurement_names:
-            client.query(f'DROP MEASUREMENT "{name}"')
-        
-        print(f"Database '{database_name}' already exists. Measurements dropped.")
-    else:
-        client.create_database(database_name)
-        client.switch_database(database_name)
-        print(f"Database '{database_name}' created.")
-        
-    print(f"Database '{database_name}' is ready.")
-
+    if any(db['name'] == database_name for db in dblist): 
+        print("Dropping database...")
+        client.drop_database(database_name)
+    
+    client.create_database(database_name)
+    client.switch_database(database_name)
+    print(f"Database '{database_name}' created.")
 
 def createDatabase():
     try:
         client = InfluxDBClient(server_address, port)
-        create_database(client)
+        print(f"Connected to InfluxDB server at {server_address}:{port}")
+        resetDatabase(client)
+        print("Closing connection...")
         client.close()
         return True
     except Exception as e:
@@ -44,4 +32,5 @@ def createDatabase():
         return False
     
 if __name__ == "__main__":
+    print("Creating database...")
     createDatabase()

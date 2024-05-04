@@ -50,7 +50,7 @@ def clearTable(conn,cursor):
         # Commit the transaction
         conn.commit()
         
-        print(f"Table f{table_name} has been cleared.")
+        print(f"Table {table_name} has been cleared.")
         
     except Exception as e:
         print(f"An error occurred: {e}")

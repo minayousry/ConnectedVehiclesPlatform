@@ -1,4 +1,5 @@
 import asyncio
+import psycopg2.extras
 import websockets
 from multiprocessing import Process, Queue
 import aiopg
@@ -30,15 +31,32 @@ def connectToDatabase():
 
     return conn,cursor
 
+def closeDatabaseConnection(cursor,conn):
+    # Close the cursor and connection
+    cursor.close()
+    conn.close()
 
-
-
+def insertRecord(conn, record):
+    cursor = conn.cursor()
+    try:
+        insert_query = f"""
+                        INSERT INTO {database_table} (
+                        vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
+                        lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
+                        co2_consumption, deceleration
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                        """
+        cursor.execute(insert_query,record)
+        conn.commit()
+    except Exception as e:
+        print(f"Failed to insert record {record} because of error {e}")
+        conn.rollback()  
 
 async def websocketServerHandler(websocket, path, queue):
     try:
         while True:
             try:
-                message = await asyncio.wait_for(websocket.recv(), timeout=20)
+                message = await asyncio.wait_for(websocket.recv(), timeout=40)
                 queue.put(message)
             except asyncio.TimeoutError:
                 queue.put("STOP")
@@ -53,7 +71,7 @@ async def websocketServerHandler(websocket, path, queue):
 
 
 
-def preprocess_data(data):
+def preprocessData(data):
     
 
     data = data[1:-1].split(',')
@@ -85,6 +103,7 @@ def preprocess_data(data):
 
 async def runWebsocketServer(queue):
     server = await websockets.serve(lambda ws, path: websocketServerHandler(ws, path, queue), "0.0.0.0", 8765)
+    print("Listening for incoming websocket connections...")
 
     try:
         await asyncio.wait_for(asyncio.Future(), timeout=100)
@@ -96,6 +115,24 @@ async def runWebsocketServer(queue):
 
 def websocketServerProcess(queue):
     asyncio.run(runWebsocketServer(queue))
+
+
+
+      
+
+def storeInDatabaseProcess(queue):
+    
+    conn,cursor = connectToDatabase()
+
+    try:
+        while True:
+            data = queue.get()
+            if data == "STOP":
+                print("Stopping the database process...")
+                break
+            insertRecord(conn, eval(data))
+    finally:
+        closeDatabaseConnection(conn,cursor)
 
 
 def insertRecords(conn, records):
@@ -113,17 +150,13 @@ def insertRecords(conn, records):
         conn.rollback()
         print(f"Failed to insert batch: {e}")
 
-
-def storeInDatabase(queue):
+def storeInDatabaseBatchProcess(queue):
 
     conn,cursor = connectToDatabase()
 
     # Turn autocommit off for batching
     conn.autocommit = False
     
-    #createTable(cursor)
-    #clearTable(conn,cursor,)
-
     records_to_insert = []
     
     try:
@@ -136,7 +169,7 @@ def storeInDatabase(queue):
             elif data == "STOP":
                 break
             
-            records_to_insert.append(preprocess_data(data))
+            records_to_insert.append(preprocessData(data))
             
             if len(records_to_insert) >= db_batch_size:  # Adjust batch size as appropriate
                 insertRecords(conn, records_to_insert)
@@ -144,7 +177,6 @@ def storeInDatabase(queue):
 
     finally:
         closeDatabaseConnection(conn,cursor)
-
 
 
     
@@ -171,17 +203,15 @@ def extractFromDatabase():
     
     return df
 
-def closeDatabaseConnection(cursor,conn):
-    # Close the cursor and connection
-    cursor.close()
-    conn.close()
 
 
+
+ 
 if __name__ == "__main__":
     queue = Queue()
 
     ws_process = Process(target=websocketServerProcess, args=(queue,))
-    db_process = Process(target=storeInDatabase, args=(queue,))
+    db_process = Process(target=storeInDatabaseProcess, args=(queue,))
     
 
     db_process.start()
@@ -194,4 +224,3 @@ if __name__ == "__main__":
     db_process.join()
 
     extractFromDatabase()
-    
