@@ -6,7 +6,7 @@ import mqtt_Influx.influx_create_db as influx_db
 import qpid_cassandra.cassandra_create_db as cassandra_db
 import webSockets_Postgresql.postgresql_create_db as postgresql_db
 import webSockets_Redis.redis_create_db as redis_db
-
+import asyncio
    
 if __name__ == '__main__':
     
@@ -37,7 +37,11 @@ if __name__ == '__main__':
         exit(1)
  
     try:
-        result = database_create_func()
+        if database_technology == "redis":
+          result = asyncio.run(database_create_func())
+        else: 
+            result = database_create_func()
+            
         if result:
             print("Database created successfully.")
         else:

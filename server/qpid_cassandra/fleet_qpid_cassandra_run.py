@@ -26,6 +26,7 @@ server_address = '127.0.0.1'
 
 db_batch_size = 100
 
+
 class Receiver(MessagingHandler):
     
     def __init__(self, url,queue):
@@ -75,6 +76,10 @@ def databaseProcess(queue):
 
         while True:
             message = queue.get()
+            
+            #convert class list to list
+            
+            
             
             if  message is None or message == "STOP":
                 print("Stopping the database process...")

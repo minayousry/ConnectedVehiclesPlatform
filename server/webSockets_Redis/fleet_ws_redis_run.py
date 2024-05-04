@@ -85,7 +85,6 @@ async def dbWriter(queue):
             # Format as day and time
             formatted_date_time = now.strftime("%Y-%m-%d %H:%M:%S.%f")
             message_with_timestamp = f"{message},{formatted_date_time}"
-            print("Setting message")
             await redis.set(f'message:{msg_id}', message_with_timestamp)
       
     except Exception as e:
@@ -102,41 +101,40 @@ def dbWriterProcess(queue):
 def dbBatchWriterProcess(queue):
     asyncio.run(dbBatchWriter(queue))
 
+
 async def websocketServerHandler(websocket, path, queue):
     try:
         while True:
             try:
-                message = await asyncio.wait_for(websocket.recv(), timeout=100)
-                # Here, you would typically handle the message, such as by echoing it back
+                message = await asyncio.wait_for(websocket.recv(), timeout=40)
                 queue.put(message)
             except asyncio.TimeoutError:
                 queue.put("STOP")
                 await websocket.close()
                 print("Timeout, sent STOP signal to db_writer.")
                 break
-            
     except websockets.ConnectionClosed:
         queue.put("STOP")
         await websocket.close()
         # Handle the connection closed, either by client or server
         print("WebSocket connection closed.")
-    
 
 
 async def runWebsocketServer(queue):
     server = await websockets.serve(lambda ws, path: websocketServerHandler(ws, path, queue), "0.0.0.0", 8765)
     print("Listening for incoming websocket connections...")
-    
+
     try:
-        await asyncio.wait_for(asyncio.Future(), timeout=20)
+        await asyncio.wait_for(asyncio.Future(), timeout=100)
     except asyncio.TimeoutError:
         print("Server timeout reached, shutting down.")
     finally:
         server.close()
         await server.wait_closed()
-        
+
 def websocketServerProcess(queue):
     asyncio.run(runWebsocketServer(queue))
+ 
 
 
 async def fetchDataFromRedis():

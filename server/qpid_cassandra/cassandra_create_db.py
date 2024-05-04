@@ -59,6 +59,7 @@ def drop_keyspace(cluster):
 def createDatabase():
     try:
         cluster = Cluster([server_address])
+        drop_keyspace(cluster)
         create_keyspace_and_table(cluster)
         cluster.shutdown()
         return True
