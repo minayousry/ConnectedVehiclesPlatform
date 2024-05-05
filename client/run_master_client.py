@@ -9,7 +9,7 @@ import ws_client_run as ws_cl
 
 import client_utilities as cl_utl
 
-remote_machine_ip_addr = "34.90.169.134"
+remote_machine_ip_addr = "34.147.17.84"
 simulation_path = "./simulation1/"
 main_simulation_file = simulation_path+"osm.sumocfg"
 cars_simulation_file = simulation_path+"osm.passenger.trips.xml"
@@ -17,7 +17,7 @@ cars_simulation_file = simulation_path+"osm.passenger.trips.xml"
 # Confiurations for SUMO
 sumo_cmd = ["sumo", "-c", main_simulation_file]
 
-no_of_cars = 100
+no_of_cars = 70
 
 
 
@@ -88,7 +88,6 @@ if __name__ == '__main__':
             kafka_cl.runKafkaClient(sumo_cmd,remote_machine_ip_addr)
         elif client_tech == "mqtt":
             mqtt_cl.runMqttClient(sumo_cmd,remote_machine_ip_addr)
-         
         elif client_tech == "qpid":
             qpid_cl.runQpidClient(sumo_cmd,remote_machine_ip_addr)
         

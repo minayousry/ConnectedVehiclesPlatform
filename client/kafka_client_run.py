@@ -42,7 +42,8 @@ def runScenario(sumo_cmd,producer):
                             displacement,turnAngle,acc,
                             fuel_cons,co2_cons,dece]
                      
-                producer.send(topic_name, value=veh_data)            
+                producer.send(topic_name, value=veh_data)
+                cl_utl.increaseMsgCount("kafka")            
         traci.close()
         
     except Exception as e:
@@ -57,7 +58,9 @@ def runKafkaClient(sumo_cmd,remote_machine_ip_addr):
     producer = KafkaProducer(bootstrap_servers=[kafka_server],
                 value_serializer=lambda v: json.dumps(v).encode('utf-8'))
 
+    cl_utl.recordStartSimTime("kafka")
     runScenario(sumo_cmd,producer)
+    cl_utl.recordEndSimTime("kafka")
         
     # Ensure all messages are sent and then close the producer
     producer.flush()

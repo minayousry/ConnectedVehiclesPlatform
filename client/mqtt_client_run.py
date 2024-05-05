@@ -12,14 +12,6 @@ import client_utilities as cl_utl
 mqtt_port = 1883 
 mqtt_topic = 'mqtt/topic'
 
-# Confiurations for SUMO
-sumoCmd = ["sumo", "-c", "osm.sumocfg"]
-
-def getdatetime():
-    utc_now = pytz.utc.localize(datetime.datetime.utcnow())
-    currentDT = utc_now.astimezone(pytz.timezone("Atlantic/Reykjavik"))
-    DATIME = currentDT.strftime("%Y-%m-%d %H:%M:%S.%f")
-    return DATIME
 
 def on_connect(client, userdata, flags, rc):
     print("Connected to MQTT broker with result code " + str(rc))
@@ -47,7 +39,7 @@ def runScenario(sumo_cmd,client):
 
                 veh_data = [
                     vehid,          # Vehicle ID as string
-                    str(getdatetime()),       # Datetime string
+                    str(cl_utl.getdatetime()),       # Datetime string
                     float(x_pos),        # X position as float
                     float(y_pos),        # Y position as float
                     float(gps_lon),      # GPS longitude as float
@@ -64,6 +56,7 @@ def runScenario(sumo_cmd,client):
                 ]
 
                 client.publish(mqtt_topic, json.dumps(veh_data))
+                cl_utl.increaseMsgCount("mqtt")
 
     finally:
         traci.close()
@@ -71,15 +64,16 @@ def runScenario(sumo_cmd,client):
 def runMqttClient(sumo_cmd,remote_machine_ip_addr):
     
     mqtt_broker = remote_machine_ip_addr
-    print(mqtt_broker)
     
     # Initialize an MQTT client
     client = mqtt.Client()
     client.on_connect = on_connect
     client.connect(mqtt_broker, mqtt_port, 60)
 
+    cl_utl.recordStartSimTime("mqtt")
     runScenario(sumo_cmd,client)
-
+    cl_utl.recordEndSimTime("mqtt")
+    
     client.disconnect()
 
     print(f"Messages sent to topic '{mqtt_topic}' on MQTT broker at {mqtt_broker}:{mqtt_port}")

@@ -37,6 +37,7 @@ class Sender(MessagingHandler):
                 data = self.data_queue.get(True,timeout=1)  # Timeout to periodically check stop_event
                 message = Message(body=data)
                 self.sender.send(message)
+                cl_utl.increaseMsgCount("qpid")
             except queue.Empty:
                 continue  # Continue checking if the stop_event is set
             except Exception as e:
@@ -97,8 +98,10 @@ def runQpidClient(sumo_cmd,remote_machine_ip_addr):
     sender_thread = threading.Thread(target=start_sender, args=(server_url,data_queue,stop_event))
     sender_thread.start()
     
+    cl_utl.recordStartSimTime("qpid")
     # Run the simulation scenario, which feeds data into the queue
     run_scenario(sumo_cmd,data_queue,stop_event)
+    cl_utl.recordEndSimTime("qpid")
     
     sender_thread.join(timeout=10)  # Wait for up to 10 seconds for the thread to finish
 
