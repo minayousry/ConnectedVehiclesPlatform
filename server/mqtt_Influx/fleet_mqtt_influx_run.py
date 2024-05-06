@@ -22,9 +22,11 @@ def on_connect(client, userdata, flags, rc):
     client.subscribe("mqtt/topic")
 
 
-def on_message(client, userdata, msg,queue):
+def on_message(client, userdata, msg,queue,no_of_received_msgs_obj):
     data_list = msg.payload.decode().split(',')
     queue.put(data_list)  # Put the data into the queue
+    with no_of_received_msgs_obj.get_lock():
+        no_of_received_msgs_obj.value += 1
     
 def on_socket_close(client, userdata, msg):
     print(f"Socket closed")
@@ -33,14 +35,12 @@ def on_disconnect(client, userdata, rc):
     print(f"Disconnected with result code {rc}")
     global socket_closed
     socket_closed = True
-    
-    
 
 # MQTT process
-def mqttProcess(queue):
+def mqttProcess(queue,no_of_received_msgs_obj):
     mqtt_client = mqtt.Client()
     mqtt_client.on_connect = on_connect
-    mqtt_client.on_message = lambda client, userdata, msg: on_message(client, userdata, msg, queue)
+    mqtt_client.on_message = lambda client, userdata, msg: on_message(client, userdata, msg, queue, no_of_received_msgs_obj)
     mqtt_client.on_socket_close = on_socket_close
     mqtt_client.on_disconnect = on_disconnect
     
@@ -118,7 +118,7 @@ def influxBatchProcess(queue):
     influx_client.close()
     
     
-def influxProcess(queue):
+def influxProcess(queue,no_of_inserted_msgs_obj):
     
     # Set up InfluxDB client
     influx_client = InfluxDBClient(host='localhost', port=8086)
@@ -131,6 +131,8 @@ def influxProcess(queue):
         if data_list is not None and data_list != "STOP":
             measurement = getMeasurement(msg_id,data_list)
             influx_client.write_points([measurement])
+            with no_of_inserted_msgs_obj.get_lock():
+                no_of_inserted_msgs_obj.value += 1
             msg_id += 1
         else:
             # End the process
@@ -190,13 +192,16 @@ if __name__ == '__main__':
     
     # Create a multiprocessing Queue for IPC
     data_queue = multiprocessing.Queue()
+    
+    no_of_received_msgs_obj = multiprocessing.Value('i', 0)
+    no_of_inserted_msgs_obj = multiprocessing.Value('i', 0)
 
     # Create and start the MQTT process
-    mqtt_proc = multiprocessing.Process(target=mqttProcess,args=(data_queue,))
+    mqtt_proc = multiprocessing.Process(target=mqttProcess,args=(data_queue,no_of_received_msgs_obj))
     mqtt_proc.start()
 
     # Create and start the InfluxDB process
-    influx_proc = multiprocessing.Process(target=influxProcess,args=(data_queue,))
+    influx_proc = multiprocessing.Process(target=influxProcess,args=(data_queue,no_of_inserted_msgs_obj))
     influx_proc.start()
 
 

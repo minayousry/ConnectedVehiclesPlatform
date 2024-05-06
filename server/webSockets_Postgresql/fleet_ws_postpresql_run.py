@@ -1,7 +1,7 @@
 import asyncio
 import psycopg2.extras
 import websockets
-from multiprocessing import Process, Queue
+import multiprocessing
 import aiopg
 import pandas as pd
 from datetime import datetime
@@ -20,8 +20,7 @@ dbname = "obd2_content_database"
 database_table = "obd2_data_table"
 db_batch_size = 100
 
-received_msgs = []
-time_diff_list = []
+websocket_port = 8765
 
 
 def connectToDatabase():
@@ -36,7 +35,7 @@ def closeDatabaseConnection(cursor,conn):
     cursor.close()
     conn.close()
 
-def insertRecord(conn, record):
+def insertRecord(conn, record,no_of_inserted_msgs_obj):
     cursor = conn.cursor()
     try:
         insert_query = f"""
@@ -48,16 +47,20 @@ def insertRecord(conn, record):
                         """
         cursor.execute(insert_query,record)
         conn.commit()
+        with no_of_inserted_msgs_obj.get_lock():
+            no_of_inserted_msgs_obj.value += 1
     except Exception as e:
         print(f"Failed to insert record {record} because of error {e}")
         conn.rollback()  
 
-async def websocketServerHandler(websocket, path, queue):
+async def websocketServerHandler(websocket, path, queue,no_of_received_msgs_obj):
     try:
         while True:
             try:
                 message = await asyncio.wait_for(websocket.recv(), timeout=40)
                 queue.put(message)
+                with no_of_received_msgs_obj.get_lock():
+                    no_of_received_msgs_obj.value += 1
             except asyncio.TimeoutError:
                 queue.put("STOP")
                 await websocket.close()
@@ -101,8 +104,9 @@ def preprocessData(data):
 
     return record
 
-async def runWebsocketServer(queue):
-    server = await websockets.serve(lambda ws, path: websocketServerHandler(ws, path, queue), "0.0.0.0", 8765)
+async def runWebsocketServer(queue,no_of_received_msgs_obj):
+    
+    server = await websockets.serve(lambda ws, path: websocketServerHandler(ws, path, queue,no_of_received_msgs_obj), "0.0.0.0", websocket_port)
     print("Listening for incoming websocket connections...")
 
     try:
@@ -113,14 +117,14 @@ async def runWebsocketServer(queue):
         server.close()
         await server.wait_closed()
 
-def websocketServerProcess(queue):
-    asyncio.run(runWebsocketServer(queue))
+def websocketServerProcess(queue,no_of_received_msgs_obj):
+    asyncio.run(runWebsocketServer(queue,no_of_received_msgs_obj))
 
 
 
       
 
-def storeInDatabaseProcess(queue):
+def storeInDatabaseProcess(queue, no_of_inserted_msgs_obj):
     
     conn,cursor = connectToDatabase()
 
@@ -130,7 +134,7 @@ def storeInDatabaseProcess(queue):
             if data == "STOP":
                 print("Stopping the database process...")
                 break
-            insertRecord(conn, eval(data))
+            insertRecord(conn, eval(data),no_of_inserted_msgs_obj)
     finally:
         closeDatabaseConnection(conn,cursor)
 
@@ -208,10 +212,13 @@ def extractFromDatabase():
 
  
 if __name__ == "__main__":
-    queue = Queue()
+    queue = multiprocessing.Queue()
 
-    ws_process = Process(target=websocketServerProcess, args=(queue,))
-    db_process = Process(target=storeInDatabaseProcess, args=(queue,))
+    no_of_received_msgs_obj = multiprocessing.Value('i', 0)
+    no_of_inserted_msgs_obj = multiprocessing.Value('i', 0)
+    
+    ws_process = multiprocessing.Process(target=websocketServerProcess, args=(queue,no_of_received_msgs_obj))
+    db_process = multiprocessing.Process(target=storeInDatabaseProcess, args=(queue,no_of_inserted_msgs_obj))
     
 
     db_process.start()

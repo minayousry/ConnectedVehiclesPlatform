@@ -1,12 +1,13 @@
 import asyncio
 import websockets
-from multiprocessing import Process, Queue
+import multiprocessing
 import aioredis
 import pandas as pd
 from datetime import datetime
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+websocket_port_number = 8765
 db_batch_size = 100
 
 async def writeBatchToRedis(redis, messages_batch):
@@ -63,7 +64,7 @@ async def dbBatchWriter(queue):
 
 
     
-async def dbWriter(queue):
+async def dbWriter(queue,no_of_inserted_msgs_obj):
     
     redis = None
     
@@ -86,6 +87,8 @@ async def dbWriter(queue):
             formatted_date_time = now.strftime("%Y-%m-%d %H:%M:%S.%f")
             message_with_timestamp = f"{message},{formatted_date_time}"
             await redis.set(f'message:{msg_id}', message_with_timestamp)
+            with no_of_inserted_msgs_obj.get_lock():
+                no_of_inserted_msgs_obj.value += 1
       
     except Exception as e:
         print(f"An error occurred: {e}")
@@ -95,19 +98,21 @@ async def dbWriter(queue):
         if 'redis' in locals():
             await redis.close()      
 
-def dbWriterProcess(queue):
-    asyncio.run(dbWriter(queue))
+def dbWriterProcess(queue,no_of_inserted_msgs_obj):
+    asyncio.run(dbWriter(queue,no_of_inserted_msgs_obj))
 
 def dbBatchWriterProcess(queue):
     asyncio.run(dbBatchWriter(queue))
 
 
-async def websocketServerHandler(websocket, path, queue):
+async def websocketServerHandler(websocket, path, queue,no_of_received_msgs_obj):
     try:
         while True:
             try:
                 message = await asyncio.wait_for(websocket.recv(), timeout=40)
                 queue.put(message)
+                with no_of_received_msgs_obj.get_lock():
+                    no_of_received_msgs_obj.value += 1
             except asyncio.TimeoutError:
                 queue.put("STOP")
                 await websocket.close()
@@ -120,8 +125,8 @@ async def websocketServerHandler(websocket, path, queue):
         print("WebSocket connection closed.")
 
 
-async def runWebsocketServer(queue):
-    server = await websockets.serve(lambda ws, path: websocketServerHandler(ws, path, queue), "0.0.0.0", 8765)
+async def runWebsocketServer(queue,no_of_received_msgs_obj):
+    server = await websockets.serve(lambda ws, path: websocketServerHandler(ws, path, queue,no_of_received_msgs_obj), "0.0.0.0", websocket_port_number)
     print("Listening for incoming websocket connections...")
 
     try:
@@ -132,8 +137,8 @@ async def runWebsocketServer(queue):
         server.close()
         await server.wait_closed()
 
-def websocketServerProcess(queue):
-    asyncio.run(runWebsocketServer(queue))
+def websocketServerProcess(queue,no_of_received_msgs_obj):
+    asyncio.run(runWebsocketServer(queue,no_of_received_msgs_obj))
  
 
 
@@ -176,10 +181,13 @@ def extractFromDatabase():
 
 if __name__ == "__main__":
     
-    queue = Queue()
+    queue = multiprocessing.Queue()
+    no_of_received_msgs_obj = multiprocessing.Value('i', 0)
+    no_of_inserted_msgs_obj = multiprocessing.Value('i', 0)
 
-    db_process = Process(target=dbWriterProcess, args=(queue,))
-    ws_process = Process(target=websocketServerProcess, args=(queue,))
+    ws_process = multiprocessing.Process(target=websocketServerProcess, args=(queue,no_of_received_msgs_obj))
+    db_process = multiprocessing.Process(target=dbWriterProcess, args=(queue,no_of_inserted_msgs_obj))
+    
 
     db_process.start()
     ws_process.start()

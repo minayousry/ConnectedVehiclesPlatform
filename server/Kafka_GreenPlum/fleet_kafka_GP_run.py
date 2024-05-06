@@ -3,7 +3,7 @@ import psycopg2
 import json
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 import pandas as pd
-from multiprocessing import Process, Queue
+import multiprocessing
 from psycopg2 import sql
 import psycopg2.extras
 
@@ -24,7 +24,7 @@ dbname = "OBD2_Data_Fleet_database"
 table_name = "OBD2_table"
 db_batch_size = 100
 
-def kafkaConsumerProcess(queue):
+def kafkaConsumerProcess(queue,no_of_received_msgs_obj):
     
     exit_code = 0
     consumer = None
@@ -42,8 +42,9 @@ def kafkaConsumerProcess(queue):
 
         for message in consumer:
             received_msg = message.value
-            
             queue.put(received_msg)
+            with no_of_received_msgs_obj.get_lock():
+                no_of_received_msgs_obj.value += 1
             
             
     except Exception as e:
@@ -63,7 +64,7 @@ def connectToDatabase():
 
     return conn,cursor
     
-def insertRecord(conn, record):
+def insertRecord(conn, record,no_of_inserted_msgs_obj):
     cursor = conn.cursor()
     try:
         cursor.execute(f"""
@@ -74,11 +75,13 @@ def insertRecord(conn, record):
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
         """, record)
         conn.commit()
+        with no_of_inserted_msgs_obj.get_lock():
+            no_of_inserted_msgs_obj.value += 1
     except Exception as e:
         conn.rollback()
         print(f"Failed to insert record: {e}")
 
-def storeInDatabaseProcess(queue):
+def storeInDatabaseProcess(queue,no_of_inserted_msgs_obj):
     conn = None
     exit_code = 0
 
@@ -88,7 +91,7 @@ def storeInDatabaseProcess(queue):
             data = queue.get()
             if data == "STOP":
                 break
-            insertRecord(conn, data)
+            insertRecord(conn, data, no_of_inserted_msgs_obj)
     except Exception as e:
         print(f"An error occurred while inserting data into Database: {e}")
         exit_code = 1
@@ -125,31 +128,6 @@ def extractFromDatabase():
     return df
 
 
-
-
-if __name__ == '__main__':
-    
-     
-    # Create a Queue for inter-process communication
-    queue = Queue()
-
-    # Create and start the Kafka consumer process
-    consumer_process = Process(target=kafkaConsumerProcess, args=(queue,))
-    consumer_process.start()
-
-    # Create and start the database inserter process
-    db_process = Process(target=storeInDatabaseProcess, args=(queue,))
-    db_process.start()
-    
-    consumer_process.join()
-
-    # Once the consumer process is done, send a "STOP" message to the db_inserter process
-    queue.put("STOP")
-    db_process.join()
-    
-    extractFromDatabase()
-
-    
 
 def insertRecords(conn, records):
     cursor = conn.cursor()
@@ -200,3 +178,31 @@ def storeInDatabasebatchProcess(queue):
         closeDatabaseConnection(conn,cursor)
     
     exit(exit_code)
+
+if __name__ == '__main__':
+    
+     
+    # Create a Queue for inter-process communication
+    queue = multiprocessing.Queue()
+    
+    no_of_received_msgs_obj = multiprocessing.Value('i', 0)
+    no_of_inserted_msgs_obj = multiprocessing.Value('i', 0)
+    
+
+    # Create and start the Kafka consumer process
+    consumer_process = multiprocessing.Process(target=kafkaConsumerProcess, args=(queue,no_of_received_msgs_obj))
+    consumer_process.start()
+
+    # Create and start the database inserter process
+    db_process = multiprocessing.Process(target=storeInDatabaseProcess, args=(queue,no_of_inserted_msgs_obj))
+    db_process.start()
+    
+    consumer_process.join()
+
+    # Once the consumer process is done, send a "STOP" message to the db_inserter process
+    queue.put("STOP")
+    db_process.join()
+    
+    extractFromDatabase()
+
+    

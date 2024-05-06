@@ -27,15 +27,16 @@ server_address = '127.0.0.1'
 db_batch_size = 100
 
 
+
 class Receiver(MessagingHandler):
     
-    def __init__(self, url,queue):
+    def __init__(self, url,queue,no_of_received_msgs):
         super(Receiver, self).__init__()
         self.url = url
         self.senders = {}
         self.queue = queue
-        self.last_message_time = time.time() 
         self.container = None 
+        self.no_of_received_msgs = no_of_received_msgs
         
     def on_connection_closed(self, event):
         print("Connection is closed")
@@ -57,19 +58,20 @@ class Receiver(MessagingHandler):
     def on_message(self, event):
         message = event.message
         self.queue.put(message.body)
-        self.last_message_time = time.time()
+        with self.no_of_received_msgs.get_lock():
+            self.no_of_received_msgs.value += 1
         
     def on_timer_task(self, event):
         if not self.messages_received:
             print("No messages received yet.")
 
-def receiverProcess(queue):
-    handler = Receiver(server_url, queue)
+def receiverProcess(queue, no_of_received_msgs):
+    handler = Receiver(server_url, queue,no_of_received_msgs)
     container = Container(handler) 
     container.run()
     
     
-def databaseProcess(queue):
+def databaseProcess(queue,no_of_inserted_msgs):
     try:
         cluster = Cluster(['localhost'])
         session = cluster.connect(keyspace_name)
@@ -78,13 +80,10 @@ def databaseProcess(queue):
             message = queue.get()
             
             #convert class list to list
-            
-            
-            
             if  message is None or message == "STOP":
                 print("Stopping the database process...")
                 break
-
+            
             # Parameterized query for security
             insert_query = f"INSERT INTO {keyspace_name}.{table_name} (id, vehicle_id,tx_time,x_pos,y_pos, \
                                                                        gps_lon, gps_lat, speed,road_id,lane_id, \
@@ -99,9 +98,11 @@ def databaseProcess(queue):
                                             ,message[9],message[10],message[11],message[12],message[13] \
                                             ,message[14],timestamp
                                         ) )
+            with no_of_inserted_msgs.get_lock():
+                no_of_inserted_msgs.value += 1
             
     except Exception as e:
-        print(f"Error during database operation: {e}")
+        print(f"Error during database operation for {message}: {e}")
     finally:
         cluster.shutdown()
         
@@ -191,17 +192,21 @@ def extractFromDatabase():
     return result
 
 
+
 if __name__ == "__main__":
     
     
     queue = multiprocessing.Queue()
+    no_of_received_msgs_obj = multiprocessing.Value('i', 0)
+    no_of_inserted_msgs_obj = multiprocessing.Value('i', 0)
+    
 
     # Start receiver process
-    receiver = multiprocessing.Process(target=receiverProcess, args=(queue,))
+    receiver = multiprocessing.Process(target=receiverProcess, args=(queue,no_of_received_msgs_obj))
     receiver.start()
     
     
-    db = multiprocessing.Process(target=databaseProcess, args=(queue,))
+    db = multiprocessing.Process(target=databaseProcess, args=(queue,no_of_inserted_msgs_obj))
     db.start()
     
     # Wait for the receiver and database process to finish
@@ -214,7 +219,11 @@ if __name__ == "__main__":
     queue.put("STOP")
     db.join()
     
+    
+    
     print("All processes have been stopped.")
+    print(no_of_received_msgs_obj.value)
+    print(no_of_inserted_msgs_obj.value)
     
 
     extractFromDatabase()

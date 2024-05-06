@@ -1,4 +1,4 @@
-from multiprocessing import Process, Queue
+import multiprocessing
 import argparse
 
 
@@ -12,16 +12,22 @@ import webSockets_Redis.fleet_ws_redis_run as websocket_redis
 import server_utilities as server_utilities
 
 def runProcesses(comm_process, database_process):
+    
+    result = False
+
+    no_of_received_msgs_obj = multiprocessing.Value('i', 0)
+    no_of_inserted_msgs_obj = multiprocessing.Value('i', 0)
+    
     try:
         # Create a multiprocessing Queue for IPC
-        data_queue = Queue()
-
+        data_queue = multiprocessing.Queue()
+            
         # Create and start the communication process
-        comm_proc = Process(target=comm_process, args=(data_queue,))
+        comm_proc = multiprocessing.Process(target=comm_process, args=(data_queue,no_of_received_msgs_obj))
         comm_proc.start()
         
         # Create and start the database process
-        db_proc = Process(target=database_process, args=(data_queue,))
+        db_proc = multiprocessing.Process(target=database_process, args=(data_queue,no_of_inserted_msgs_obj))
         db_proc.start()
         
         # Wait for both processes to finish
@@ -29,22 +35,23 @@ def runProcesses(comm_process, database_process):
         
         if comm_proc.exitcode != 0:
             print("comm Process terminated with exit code:",comm_proc.exitcode)
-            return False
+            result = False
+        else:
+            # Signal the database process to stop
+            data_queue.put("STOP")
 
-        # Signal the database process to stop
-        data_queue.put("STOP")
-
-        db_proc.join()
+            db_proc.join()
         
-        if db_proc.exitcode != 0:
-            print("DBC Process terminated with exit code:")
-            return False
-        
-        return True
+            if db_proc.exitcode == 0:
+                result = True
+            else:
+                print("DBC Process terminated with exit code:")
+                result = False
     except Exception as e:
         print(f"An error occurred: {e}")
-        return False
-
+        result = False
+    finally:
+        return result,no_of_received_msgs_obj.value,no_of_inserted_msgs_obj.value
 
 
 def createReport(database_extract_func,generation_path):
@@ -77,7 +84,16 @@ if __name__ == '__main__':
     comm_process = None
     database_process = None
     database_extract_func = None
+    reporting_module = None
     generation_path = "fleetManager/server/Kafka_GreenPlum/"
+    
+    srever_techs = ["mqtt_influx", "kafka_greenplum", "qpid_cassandra", "websocket_postgresql", "websocket_redis"]
+    
+    if server_tech not in srever_techs:
+        print("Invalid server technology. Please select one of the following: mqtt_influx, kafka_greenplum, qpid_cassandra, websocket_postgresql or websocket_redis")
+        exit(1)
+    
+    server_utilities.recordStartreceptionStorageTime(server_tech)
     
     
     if server_tech == "kafka_greenplum":
@@ -91,7 +107,6 @@ if __name__ == '__main__':
         database_process = mqtt_influx.influxProcess
         database_extract_func = mqtt_influx.extractFromDatabase
         generation_path = "./mqtt_Influx/"
-        
         
     elif server_tech == "qpid_cassandra":
         comm_process = qpid_cassandra.receiverProcess
@@ -113,18 +128,19 @@ if __name__ == '__main__':
         database_extract_func = websocket_redis.extractFromDatabase
         generation_path = "./webSockets_Redis/"
         
-        
-    else:
-        print("Invalid server technology. Please select one of the following: mqtt_influx, kafka_greenplum, qpid_cassandra, websocket_postgresql or websocket_redis")
-        exit(1)
  
-    try:        
-        result = runProcesses(comm_process, database_process)
+    try:
+        
+        result,no_of_received_msgs,no_of_inserted_records = runProcesses(comm_process, database_process)
         
         if result:
             print("Processes have finished successfully.")
-            
+            server_utilities.recordEndreceptionStorageTime(server_tech)
+            server_utilities.setReceivedMsgCount(server_tech,no_of_received_msgs)
+            server_utilities.setInsertedMsgCount(server_tech,no_of_inserted_records)
+            server_utilities.createProfilingReport(server_tech)
             createReport(database_extract_func,generation_path)
+
             
 
         else:

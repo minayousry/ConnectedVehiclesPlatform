@@ -1,4 +1,3 @@
-    
 import argparse
 import asyncio
 import subprocess
@@ -95,7 +94,7 @@ if __name__ == '__main__':
         else:
             new_kafka_server = text_to_search + """//"""+str(kafka_server_address)+":"+kafka_port_num
         
-            server_utilities.set_file_mode(kafka_cfg_path, 'r')
+            server_utilities.setFileMode(kafka_cfg_path, 'r')
             setKafkaIpAddress(kafka_cfg_path,text_to_search,new_kafka_server)
         
     elif server_tech == "mqtt_influx":
