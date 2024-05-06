@@ -145,7 +145,7 @@ def insertRecords(conn, records):
         print(f"Failed to insert batch: {e}")
 
 
-def storeInDatabasebatchProcess(queue):
+def storeInDatabaseBatchProcess(queue):
     
     exit_code = 0
 

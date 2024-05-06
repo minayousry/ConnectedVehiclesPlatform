@@ -15,6 +15,9 @@ port_no = 1883
 mqtt_comm_timeout = 20
 socket_closed = False
 
+received_msg_count = 0
+inserted_msg_count = 0
+
 
 # MQTT callback functions
 def on_connect(client, userdata, flags, rc):
@@ -25,8 +28,8 @@ def on_connect(client, userdata, flags, rc):
 def on_message(client, userdata, msg,queue,no_of_received_msgs_obj):
     data_list = msg.payload.decode().split(',')
     queue.put(data_list)  # Put the data into the queue
-    with no_of_received_msgs_obj.get_lock():
-        no_of_received_msgs_obj.value += 1
+    global received_msg_count
+    received_msg_count += 1
     
 def on_socket_close(client, userdata, msg):
     print(f"Socket closed")
@@ -47,11 +50,16 @@ def mqttProcess(queue,no_of_received_msgs_obj):
     mqtt_client.connect(mqtt_broker_address, port_no , 60)
     
     mqtt_client.loop_start()
+    
+    
+        
  
     # Get the current time in seconds
     start_time = time.time()
     
+
     while True:
+            
         current_time = time.time()
         time_diff = current_time - start_time
         #print(time_diff)
@@ -60,6 +68,9 @@ def mqttProcess(queue,no_of_received_msgs_obj):
             mqtt_client.loop_stop()
             print("MQTT communication timeout")
             queue.put("STOP")
+            global received_msg_count
+            with no_of_received_msgs_obj.get_lock():
+                no_of_received_msgs_obj.value = received_msg_count
             mqtt_client.loop_stop()
             break
         elif not queue.empty():
@@ -93,51 +104,66 @@ def getMeasurement(msg_id,data_list):
     return measurement    
 
 # InfluxDB process
-def influxBatchProcess(queue):
+def influxBatchProcess(queue,no_of_inserted_msgs_obj):
+    
+    global inserted_msg_count
     
     # Set up InfluxDB client
     influx_client = InfluxDBClient(host='localhost', port=8086)
     influx_client.switch_database(database_name)
     
-    msg_id = 0
     measurement_body = []
     while True:
         data_list = queue.get()  # Get the data from the queue
         if data_list is not None and data_list != "STOP":   
-            measurement = getMeasurement(msg_id,data_list)
+            measurement = getMeasurement(inserted_msg_count,data_list)
             measurement_body.append(measurement)
-            msg_id += 1
+            inserted_msg_count += 1
             
-            if msg_id % db_batch_size == 0:
-                influx_client.write_points(measurement_body)
-                measurement_body = []
+            if inserted_msg_count % db_batch_size == 0:
+                try:
+                    influx_client.write_points(measurement_body)
+                    with no_of_inserted_msgs_obj.get_lock():
+                        no_of_inserted_msgs_obj.value += db_batch_size
+                except Exception as e:
+                    print(f"Error in inserting batch {measurement_body}: {e}")
+                finally:
+                    measurement_body = []
         else:
-            # End the process
             break
     influx_client.write_points(measurement_body)
+    with no_of_inserted_msgs_obj.get_lock():
+        no_of_inserted_msgs_obj.value += len(measurement_body)
+        
     influx_client.close()
     
     
 def influxProcess(queue,no_of_inserted_msgs_obj):
     
+    global inserted_msg_count
+    
     # Set up InfluxDB client
     influx_client = InfluxDBClient(host='localhost', port=8086)
     influx_client.switch_database(database_name)
     
-    msg_id = 0
     measurement_body = []
     while True:
         data_list = queue.get()  # Get the data from the queue
         if data_list is not None and data_list != "STOP":
-            measurement = getMeasurement(msg_id,data_list)
-            influx_client.write_points([measurement])
-            with no_of_inserted_msgs_obj.get_lock():
-                no_of_inserted_msgs_obj.value += 1
-            msg_id += 1
+            measurement = getMeasurement(inserted_msg_count,data_list)
+            try:
+                influx_client.write_points([measurement])
+                inserted_msg_count += 1
+            except Exception as e:
+                print(f"Error in inserting {measurement}: {e}")
         else:
             # End the process
+            print("end the Influx process")
             break
     
+    
+    with no_of_inserted_msgs_obj.get_lock():
+        no_of_inserted_msgs_obj.value = inserted_msg_count
     influx_client.close()    
     
         
@@ -151,9 +177,6 @@ def extractFromDatabase():
     # Fetch all measurements
     measurements = influx_client.query('SHOW MEASUREMENTS').get_points()
     measurement_names = [measurement['name'] for measurement in measurements]
-
-    # Drop each measurement
-    print(len(measurement_names))
     
     dict_list = []
     
@@ -170,17 +193,11 @@ def extractFromDatabase():
     df['tx_time'] = df['tx_time'].str.replace('\"','').str.strip()
     
     
-    #print(df['storage_time'])
-    #df['storage_time'] = df['storage_time'].str[:-7].str.replace('\"','').str.strip()
-    
-    
     # Convert 'time' column to datetime format with timezone specifier 'Z'
     df['storage_time'] = pd.to_datetime(df['time'], format="%Y-%m-%dT%H:%M:%S.%fZ")
     
     df['storage_time'] = pd.to_datetime(df['storage_time'], format='%Y-%m-%d %H:%M:%S.%f')
 
-    print(df['storage_time'].iloc[0])
-    
     influx_client.close()
     
     return df
@@ -191,7 +208,7 @@ if __name__ == '__main__':
     
     
     # Create a multiprocessing Queue for IPC
-    data_queue = multiprocessing.Queue()
+    data_queue = multiprocessing.Queue(maxsize=9000000)
     
     no_of_received_msgs_obj = multiprocessing.Value('i', 0)
     no_of_inserted_msgs_obj = multiprocessing.Value('i', 0)
@@ -212,6 +229,9 @@ if __name__ == '__main__':
     data_queue.put("STOP")
     
     influx_proc.join()
+    
+    print(f"Number of received messages: {no_of_received_msgs_obj.value}")
+    print(f"Number of inserted messages: {no_of_inserted_msgs_obj.value}")
     
     extractFromDatabase()
 

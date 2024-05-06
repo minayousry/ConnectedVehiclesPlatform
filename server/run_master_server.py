@@ -11,6 +11,9 @@ import webSockets_Redis.fleet_ws_redis_run as websocket_redis
 #import utilities
 import server_utilities as server_utilities
 
+
+enable_database_batch_inserion = False
+
 def runProcesses(comm_process, database_process):
     
     result = False
@@ -20,7 +23,7 @@ def runProcesses(comm_process, database_process):
     
     try:
         # Create a multiprocessing Queue for IPC
-        data_queue = multiprocessing.Queue()
+        data_queue = multiprocessing.Queue(maxsize=9900000)
             
         # Create and start the communication process
         comm_proc = multiprocessing.Process(target=comm_process, args=(data_queue,no_of_received_msgs_obj))
@@ -98,33 +101,56 @@ if __name__ == '__main__':
     
     if server_tech == "kafka_greenplum":
         comm_process = kafka_gp.kafkaConsumerProcess
-        database_process = kafka_gp.storeInDatabaseProcess
+        
+        if enable_database_batch_inserion:
+            database_process = kafka_gp.storeInDatabaseBatchProcess
+        else:
+            database_process = kafka_gp.storeInDatabaseProcess
+            
         database_extract_func = kafka_gp.extractFromDatabase
         generation_path = "./Kafka_GreenPlum/"
         
     elif server_tech == "mqtt_influx":
         comm_process = mqtt_influx.mqttProcess
-        database_process = mqtt_influx.influxProcess
+        
+        if enable_database_batch_inserion:
+            database_process = mqtt_influx.influxBatchProcess
+        else:
+            database_process = mqtt_influx.influxProcess
+            
         database_extract_func = mqtt_influx.extractFromDatabase
         generation_path = "./mqtt_Influx/"
         
     elif server_tech == "qpid_cassandra":
         comm_process = qpid_cassandra.receiverProcess
-        database_process = qpid_cassandra.databaseProcess
+        
+        if enable_database_batch_inserion:
+            database_process = qpid_cassandra.databaseBatchProcess
+        else:
+            database_process = qpid_cassandra.databaseProcess
+            
         database_extract_func = qpid_cassandra.extractFromDatabase
         generation_path = "./qpid_cassandra/"
         
         
     elif server_tech == "websocket_postgresql":
         comm_process = websocket_postgresql.websocketServerProcess
-        database_process = websocket_postgresql.storeInDatabaseProcess
+        
+        if enable_database_batch_inserion:
+            database_process = websocket_postgresql.storeInDatabaseBatchProcess
+        else:
+            database_process = websocket_postgresql.storeInDatabaseProcess
+            
         database_extract_func = websocket_postgresql.extractFromDatabase
         generation_path = "./webSockets_Postgresql/"
         
         
     elif server_tech == "websocket_redis":
         comm_process = websocket_redis.websocketServerProcess
-        database_process = websocket_redis.dbWriterProcess
+        if enable_database_batch_inserion:
+            database_process = websocket_redis.dbBatchWriterProcess
+        else:
+            database_process = websocket_redis.dbWriterProcess
         database_extract_func = websocket_redis.extractFromDatabase
         generation_path = "./webSockets_Redis/"
         
