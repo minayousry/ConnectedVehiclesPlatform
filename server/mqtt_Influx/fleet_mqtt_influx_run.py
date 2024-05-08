@@ -12,12 +12,15 @@ db_batch_size = 100
 
 mqtt_broker_address = "localhost"
 port_no = 1883
-mqtt_comm_timeout = 20
+mqtt_comm_timeout = 1
 socket_closed = False
 
 received_msg_count = 0
 inserted_msg_count = 0
 
+start_time = time.time()
+
+is_msg_received = False
 
 # MQTT callback functions
 def on_connect(client, userdata, flags, rc):
@@ -25,37 +28,43 @@ def on_connect(client, userdata, flags, rc):
     client.subscribe("mqtt/topic")
 
 
-def on_message(client, userdata, msg,queue,no_of_received_msgs_obj):
+def on_message(client, userdata, msg,queue):
+    global start_time
+    global is_msg_received
+    global received_msg_count
+    
+    if not is_msg_received:
+        is_msg_received = True
+    
+    # Get the current time in seconds
+    start_time = time.time()
+    
     data_list = msg.payload.decode().split(',')
     queue.put(data_list)  # Put the data into the queue
-    global received_msg_count
-    received_msg_count += 1
+    received_msg_count+= 1
     
+
 def on_socket_close(client, userdata, msg):
     print(f"Socket closed")
     
 def on_disconnect(client, userdata, rc):
     print(f"Disconnected with result code {rc}")
-    global socket_closed
-    socket_closed = True
 
 # MQTT process
 def mqttProcess(queue,no_of_received_msgs_obj):
+    
+    global start_time
+    global is_msg_received
+    
     mqtt_client = mqtt.Client()
     mqtt_client.on_connect = on_connect
-    mqtt_client.on_message = lambda client, userdata, msg: on_message(client, userdata, msg, queue, no_of_received_msgs_obj)
+    mqtt_client.on_message = lambda client, userdata, msg: on_message(client, userdata, msg, queue)
     mqtt_client.on_socket_close = on_socket_close
     mqtt_client.on_disconnect = on_disconnect
     
     mqtt_client.connect(mqtt_broker_address, port_no , 60)
     
     mqtt_client.loop_start()
-    
-    
-        
- 
-    # Get the current time in seconds
-    start_time = time.time()
     
 
     while True:
@@ -64,44 +73,16 @@ def mqttProcess(queue,no_of_received_msgs_obj):
         time_diff = current_time - start_time
         #print(time_diff)
         
-        if (queue.empty() and ((time_diff > mqtt_comm_timeout) or socket_closed)):
-            mqtt_client.loop_stop()
-            print("MQTT communication timeout")
-            queue.put("STOP")
+        
+        
+        if (is_msg_received and queue.empty() and time_diff > mqtt_comm_timeout):
             global received_msg_count
             with no_of_received_msgs_obj.get_lock():
                 no_of_received_msgs_obj.value = received_msg_count
             mqtt_client.loop_stop()
+            print("MQTT communication timeout")
+            queue.put("STOP")
             break
-        elif not queue.empty():
-            # Reset the start time
-            start_time = time.time()
-    
-def getMeasurement(msg_id,data_list):
-    
-    measurement = {
-        "measurement": str(msg_id),
-        "fields": {
-            "vehicle_id": data_list[0].replace('[',''),
-            "tx_time": data_list[1],
-            "x_pos": float(data_list[2]),
-            "y_pos": float(data_list[3]),
-            "gps_lon": float(data_list[4]),
-            "gps_lat": float(data_list[5]),
-            "speed": float(data_list[6]),
-            "road_id": data_list[7],
-            "lane_id": data_list[8],
-            "displacement": float(data_list[9]),
-            "turn_angle": float(data_list[10]),
-            "acceleration": float(data_list[11]),
-            "fuel_consumption": float(data_list[12]),
-            "co2_consumption": float(data_list[13]),
-            "deceleration": float(data_list[14].replace(']','')),
-            #"storage_time": str(formatted_time)
-        }
-    }
-    
-    return measurement    
 
 # InfluxDB process
 def influxBatchProcess(queue,no_of_inserted_msgs_obj):
@@ -137,6 +118,45 @@ def influxBatchProcess(queue,no_of_inserted_msgs_obj):
         
     influx_client.close()
     
+    
+def getMeasurement(msg_id,data_list):
+    
+    measurement = {
+        "measurement": str(msg_id),
+        "fields": {
+            "vehicle_id": data_list[0].replace('[',''),
+            "tx_time": data_list[1],
+            "x_pos": float(data_list[2]),
+            "y_pos": float(data_list[3]),
+            "gps_lon": float(data_list[4]),
+            "gps_lat": float(data_list[5]),
+            "speed": float(data_list[6]),
+            "road_id": data_list[7],
+            "lane_id": data_list[8],
+            "displacement": float(data_list[9]),
+            "turn_angle": float(data_list[10]),
+            "acceleration": float(data_list[11]),
+            "fuel_consumption": float(data_list[12]),
+            "co2_consumption": float(data_list[13]),
+            "deceleration": float(data_list[14].replace(']','')),
+            #"storage_time": str(formatted_time)
+        }
+    }
+    
+    return measurement    
+
+def get_line_protocol(msg_id, data_list):
+    fields = ",".join([f"{key}={value}" for key, value in zip(
+        ["vehicle_id", "tx_time", "x_pos", "y_pos", "gps_lon", "gps_lat", 
+         "speed", "road_id", "lane_id", "displacement", "turn_angle", 
+         "acceleration", "fuel_consumption", "co2_consumption", "deceleration"],
+        [data_list[0].replace('[',''), data_list[1], float(data_list[2]),
+         float(data_list[3]), float(data_list[4]), float(data_list[5]), 
+         float(data_list[6]), data_list[7], data_list[8], float(data_list[9]), 
+         float(data_list[10]), float(data_list[11]), float(data_list[12]), 
+         float(data_list[13]), float(data_list[14].replace(']',''))])
+    ])
+    return f"{msg_id} {fields}"
     
 def influxProcess(queue,no_of_inserted_msgs_obj):
     
