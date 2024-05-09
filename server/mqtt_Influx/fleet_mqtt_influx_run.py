@@ -12,7 +12,7 @@ db_batch_size = 100
 
 mqtt_broker_address = "localhost"
 port_no = 1883
-mqtt_comm_timeout = 1
+mqtt_comm_timeout = 5
 socket_closed = False
 
 received_msg_count = 0
@@ -33,15 +33,21 @@ def on_message(client, userdata, msg,queue):
     global is_msg_received
     global received_msg_count
     
-    if not is_msg_received:
-        is_msg_received = True
-    
     # Get the current time in seconds
     start_time = time.time()
     
     data_list = msg.payload.decode().split(',')
-    queue.put(data_list)  # Put the data into the queue
-    received_msg_count+= 1
+
+
+    if data_list[0] != '["STOP"]':
+        queue.put(data_list)  # Put the data into the queue
+        received_msg_count += 1  
+    else:    
+        is_msg_received = True
+    
+    
+    
+    
     
 
 def on_socket_close(client, userdata, msg):
@@ -75,7 +81,7 @@ def mqttProcess(queue,no_of_received_msgs_obj):
         
         
         
-        if (is_msg_received and queue.empty() and time_diff > mqtt_comm_timeout):
+        if (is_msg_received and (queue.empty())):
             global received_msg_count
             with no_of_received_msgs_obj.get_lock():
                 no_of_received_msgs_obj.value = received_msg_count
@@ -90,7 +96,7 @@ def influxBatchProcess(queue,no_of_inserted_msgs_obj):
     global inserted_msg_count
     
     # Set up InfluxDB client
-    influx_client = InfluxDBClient(host='localhost', port=8086)
+    influx_client = InfluxDBClient(host='localhost', port=8086,gzip=True)
     influx_client.switch_database(database_name)
     
     measurement_body = []
@@ -163,7 +169,7 @@ def influxProcess(queue,no_of_inserted_msgs_obj):
     global inserted_msg_count
     
     # Set up InfluxDB client
-    influx_client = InfluxDBClient(host='localhost', port=8086)
+    influx_client = InfluxDBClient(host='localhost', port=8086,gzip=True)
     influx_client.switch_database(database_name)
     
     measurement_body = []
@@ -172,7 +178,7 @@ def influxProcess(queue,no_of_inserted_msgs_obj):
         if data_list is not None and data_list != "STOP":
             measurement = getMeasurement(inserted_msg_count,data_list)
             try:
-                influx_client.write_points([measurement])
+                influx_client.write(measurement)
                 inserted_msg_count += 1
             except Exception as e:
                 print(f"Error in inserting {measurement}: {e}")
