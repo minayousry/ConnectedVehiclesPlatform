@@ -96,7 +96,13 @@ def influxBatchProcess(queue,no_of_inserted_msgs_obj):
     global inserted_msg_count
     
     # Set up InfluxDB client
-    influx_client = InfluxDBClient(host='localhost', port=8086,gzip=True)
+    influx_client = InfluxDBClient(
+                    host='localhost',          # InfluxDB server host
+                    port=8086,                 # InfluxDB server port
+                    timeout=5,                 # Timeout for HTTP requests (in seconds)
+                    verify_ssl=False,           # Enable SSL certificate verification
+                    gzip=True,retries=3,pool_size=100
+                    )
     influx_client.switch_database(database_name)
     
     measurement_body = []
@@ -169,7 +175,14 @@ def influxProcess(queue,no_of_inserted_msgs_obj):
     global inserted_msg_count
     
     # Set up InfluxDB client
-    influx_client = InfluxDBClient(host='localhost', port=8086,gzip=True)
+    influx_client = InfluxDBClient(
+                    host='localhost',          # InfluxDB server host
+                    port=8086,                 # InfluxDB server port
+                    timeout=5,                 # Timeout for HTTP requests (in seconds)
+                    verify_ssl=False,           # Enable SSL certificate verification
+                    gzip=True,retries=3,pool_size=100
+                    )
+    
     influx_client.switch_database(database_name)
     
     measurement_body = []
@@ -178,7 +191,7 @@ def influxProcess(queue,no_of_inserted_msgs_obj):
         if data_list is not None and data_list != "STOP":
             measurement = getMeasurement(inserted_msg_count,data_list)
             try:
-                influx_client.write(measurement)
+                influx_client.write_points([measurement])
                 inserted_msg_count += 1
             except Exception as e:
                 print(f"Error in inserting {measurement}: {e}")
