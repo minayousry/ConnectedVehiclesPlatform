@@ -90,20 +90,28 @@ def mqttProcess(queue,no_of_received_msgs_obj):
             queue.put("STOP")
             break
 
-# InfluxDB process
-def influxBatchProcess(queue,no_of_inserted_msgs_obj):
-    
-    global inserted_msg_count
-    
+
+def configureClient():
     # Set up InfluxDB client
     influx_client = InfluxDBClient(
                     host='localhost',          # InfluxDB server host
                     port=8086,                 # InfluxDB server port
                     timeout=5,                 # Timeout for HTTP requests (in seconds)
                     verify_ssl=False,           # Enable SSL certificate verification
-                    gzip=True,retries=3,pool_size=100
+                    gzip=True,
+                    retries=3,
+                    pool_size=100
                     )
     influx_client.switch_database(database_name)
+    
+    return influx_client
+
+# InfluxDB process
+def influxBatchProcess(queue,no_of_inserted_msgs_obj):
+    
+    global inserted_msg_count
+    
+    influx_client = configureClient()
     
     measurement_body = []
     while True:
@@ -174,16 +182,7 @@ def influxProcess(queue,no_of_inserted_msgs_obj):
     
     global inserted_msg_count
     
-    # Set up InfluxDB client
-    influx_client = InfluxDBClient(
-                    host='localhost',          # InfluxDB server host
-                    port=8086,                 # InfluxDB server port
-                    timeout=5,                 # Timeout for HTTP requests (in seconds)
-                    verify_ssl=False,           # Enable SSL certificate verification
-                    gzip=True,retries=3,pool_size=100
-                    )
-    
-    influx_client.switch_database(database_name)
+    influx_client = configureClient()
     
     measurement_body = []
     while True:
@@ -208,8 +207,7 @@ def influxProcess(queue,no_of_inserted_msgs_obj):
         
 def extractFromDatabase():
     
-    influx_client = InfluxDBClient(host='localhost', port=8086)
-    influx_client.switch_database(database_name)
+    influx_client = configureClient()
     
     all_data_frames = [] 
      

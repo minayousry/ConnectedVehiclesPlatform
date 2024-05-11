@@ -12,7 +12,7 @@ import webSockets_Redis.fleet_ws_redis_run as websocket_redis
 import server_utilities as server_utilities
 
 
-enable_database_batch_inserion = False
+enable_database_batch_inserion = True
 
 def runProcesses(comm_process, database_process):
     
@@ -21,9 +21,11 @@ def runProcesses(comm_process, database_process):
     no_of_received_msgs_obj = multiprocessing.Value('i', 0)
     no_of_inserted_msgs_obj = multiprocessing.Value('i', 0)
     
+    total_size_bytes = 9 * 1024 * 1024  # 9 GB
+    
     try:
         # Create a multiprocessing Queue for IPC
-        data_queue = multiprocessing.Queue(maxsize=9900000)
+        data_queue = multiprocessing.Queue(maxsize=total_size_bytes)
             
         # Create and start the communication process
         comm_proc = multiprocessing.Process(target=comm_process, args=(data_queue,no_of_received_msgs_obj))
@@ -166,8 +168,6 @@ if __name__ == '__main__':
             server_utilities.setInsertedMsgCount(server_tech,no_of_inserted_records)
             server_utilities.createProfilingReport(server_tech)
             createReport(database_extract_func,generation_path)
-
-            
 
         else:
             print("Processes have terminated for some errors.")
