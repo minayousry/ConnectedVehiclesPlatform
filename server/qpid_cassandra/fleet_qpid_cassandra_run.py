@@ -1,7 +1,8 @@
 import multiprocessing
 from cassandra.cluster import Cluster
-from proton.handlers import MessagingHandler
-from proton.reactor import Container 
+from proton.handlers import MessagingHandler, TransactionHandler
+from proton.reactor import Container
+from proton import Message 
 from proton import Event
 import time
 from uuid import uuid4
@@ -11,7 +12,8 @@ import pandas as pd
 import sys
 import os
 
-
+received_msg_count = 0
+inserted_msg_count = 0
 
 
 #Qpid configurations
@@ -39,9 +41,14 @@ class Receiver(MessagingHandler):
         self.no_of_received_msgs = no_of_received_msgs
         
     def on_connection_closed(self, event):
+        global received_msg_count
         print("Connection is closed")
         #end the connection
         self.queue.put("STOP")
+        
+        with self.no_of_received_msgs.get_lock():
+            self.no_of_received_msgs.value = received_msg_count
+        
         if self.container:
             self.container.stop()
         
@@ -56,10 +63,20 @@ class Receiver(MessagingHandler):
         self.container.stop()
 
     def on_message(self, event):
-        message = event.message
-        self.queue.put(message.body)
-        with self.no_of_received_msgs.get_lock():
-            self.no_of_received_msgs.value += 1
+        global received_msg_count
+        
+        try:
+            message = event.message
+            self.queue.put(message.body)
+            # Acknowledge the message to the broker
+            event.receiver.advance()
+            received_msg_count += 1
+        except Exception as e:
+            print(type(message))
+            print(f"Error processing message: {message.body}:{e}")
+            
+        
+
         
     def on_timer_task(self, event):
         if not self.messages_received:
@@ -72,6 +89,16 @@ def receiverProcess(queue, no_of_received_msgs):
     
     
 def databaseProcess(queue,no_of_inserted_msgs):
+    
+    global inserted_msg_count
+    
+    # Parameterized query for security
+    insert_query = f"INSERT INTO {keyspace_name}.{table_name} (id, vehicle_id,tx_time,x_pos,y_pos, \
+                                                                gps_lon, gps_lat, speed,road_id,lane_id, \
+                                                                displacement, turn_angle, acceleration, fuel_consumption,co2_consumption, \
+                                                                deceleration,storage_time \
+                                                                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+    
     try:
         cluster = Cluster(['localhost'])
         session = cluster.connect(keyspace_name)
@@ -84,35 +111,29 @@ def databaseProcess(queue,no_of_inserted_msgs):
                 print("Stopping the database process...")
                 break
             
-            # Parameterized query for security
-            insert_query = f"INSERT INTO {keyspace_name}.{table_name} (id, vehicle_id,tx_time,x_pos,y_pos, \
-                                                                       gps_lon, gps_lat, speed,road_id,lane_id, \
-                                                                       displacement, turn_angle, acceleration, fuel_consumption,co2_consumption, \
-                                                                       deceleration,storage_time \
-                                                                       ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
             
-            timestamp  = datetime.now()                                                   
+            
+            timestamp  = datetime.now()                                                 
             
             session.execute(insert_query,( uuid4(), message[0],message[1],message[2],message[3] \
                                             ,message[4],message[5],message[6],message[7],message[8] \
                                             ,message[9],message[10],message[11],message[12],message[13] \
                                             ,message[14],timestamp
                                         ) )
-            with no_of_inserted_msgs.get_lock():
-                no_of_inserted_msgs.value += 1
+            inserted_msg_count += 1
+            
+            
             
     except Exception as e:
         print(f"Error during database operation for {message}: {e}")
     finally:
+        with no_of_inserted_msgs.get_lock():
+                no_of_inserted_msgs.value = inserted_msg_count
         cluster.shutdown()
         
 
-def insertBatch(session, batch, table_name):
-    insert_query = f"INSERT INTO {table_name} (id, vehicle_id, tx_time, x_pos, y_pos, \
-                                               gps_lon, gps_lat, speed, road_id, lane_id, \
-                                               displacement, turn_angle, acceleration, fuel_consumption, co2_consumption, \
-                                               deceleration, storage_time) \
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+def insertBatch(session, batch,insert_query):
+
 
     timestamp = datetime.now()
 
@@ -122,7 +143,16 @@ def insertBatch(session, batch, table_name):
                                         message[9], message[10], message[11], message[12], message[13], \
                                         message[14], timestamp))      
 
-def databaseBatchProcess(queue, keyspace_name, table_name):
+def databaseBatchProcess(queue,no_of_inserted_msgs):
+    
+    global inserted_msg_count
+    
+    insert_query = f"INSERT INTO {table_name} (id, vehicle_id, tx_time, x_pos, y_pos, \
+                                               gps_lon, gps_lat, speed, road_id, lane_id, \
+                                               displacement, turn_angle, acceleration, fuel_consumption, co2_consumption, \
+                                               deceleration, storage_time) \
+                                               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+    
     try:
         cluster = Cluster(['localhost'])
         session = cluster.connect(keyspace_name)
@@ -142,18 +172,22 @@ def databaseBatchProcess(queue, keyspace_name, table_name):
 
             # Check if batch size is reached
             if len(batch) >= db_batch_size:
-                insertBatch(session, batch, table_name)
+                insertBatch(session, batch,insert_query)
                 batch_count += 1
+                inserted_msg_count += db_batch_size
                 batch = []
 
         # Insert remaining records if any
-        if batch:
-            insertBatch(session, batch, table_name)
+        if len(batch) > 0:
+            insertBatch(session,batch,insert_query)
+            inserted_msg_count += len(batch)
             batch_count += 1
 
     except Exception as e:
         print(f"Error during database operation: {e}")
     finally:
+        with no_of_inserted_msgs.get_lock():
+                no_of_inserted_msgs.value = inserted_msg_count
         cluster.shutdown()
 
   
