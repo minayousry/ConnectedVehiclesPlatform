@@ -12,7 +12,7 @@ import webSockets_Redis.fleet_ws_redis_run as websocket_redis
 import server_utilities as server_utilities
 
 
-enable_database_batch_inserion = True
+enable_database_batch_inserion = False
 
 def runProcesses(comm_process, database_process):
     
@@ -25,7 +25,7 @@ def runProcesses(comm_process, database_process):
     
     try:
         # Create a multiprocessing Queue for IPC
-        data_queue = multiprocessing.Queue(maxsize=total_size_bytes)
+        data_queue = multiprocessing.Queue(maxsize=9900000)
             
         # Create and start the communication process
         comm_proc = multiprocessing.Process(target=comm_process, args=(data_queue,no_of_received_msgs_obj))
@@ -59,14 +59,14 @@ def runProcesses(comm_process, database_process):
         return result,no_of_received_msgs_obj.value,no_of_inserted_msgs_obj.value
 
 
-def createReport(database_extract_func,generation_path):
+def createReport(database_extract_func,generation_path,server_tech):
     
     print("Extracting information from the database...")
     extracted_df = database_extract_func()
     
     if extracted_df is not None:
         print("Creating excel file...")
-        server_utilities.createExcelFile(extracted_df,generation_path)
+        server_utilities.createExcelFile(extracted_df,generation_path,server_tech,enable_database_batch_inserion)
     
 
 
@@ -167,7 +167,7 @@ if __name__ == '__main__':
             server_utilities.setReceivedMsgCount(server_tech,no_of_received_msgs)
             server_utilities.setInsertedMsgCount(server_tech,no_of_inserted_records)
             server_utilities.createProfilingReport(server_tech)
-            createReport(database_extract_func,generation_path)
+            createReport(database_extract_func,generation_path,server_tech,)
 
         else:
             print("Processes have terminated for some errors.")

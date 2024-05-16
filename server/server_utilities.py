@@ -238,7 +238,7 @@ def createProfilingReport(technology):
     print(f"Reception and storage duration: {reception_storage_duration} seconds")
     
 
-def createExcelFile(obd2_data_frame,generation_path):
+def createExcelFile(obd2_data_frame,generation_path,server_tech,is_batch_enabled):
 
     try:
         if(obd2_data_frame is None):
@@ -267,8 +267,14 @@ def createExcelFile(obd2_data_frame,generation_path):
         # Convert time difference to seconds (assuming all values are valid)
         obd2_data_frame['time_diff_seconds'] = time_diff.dt.total_seconds().abs()
         
+        file_name = generation_path+server_tech
+        
+        if is_batch_enabled:
+            file_name += "_batched"
+        
+        file_name += "_obd2_data_report.xlsx"
         # Generate Excel report
-        obd2_data_frame.to_excel(generation_path+"obd2_data_report.xlsx", index=False)
+        obd2_data_frame.to_excel(file_name, index=False)
         print("Excel file has been created.")
     
     except Exception as e:

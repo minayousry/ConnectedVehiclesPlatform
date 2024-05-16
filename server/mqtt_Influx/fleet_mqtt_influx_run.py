@@ -90,28 +90,20 @@ def mqttProcess(queue,no_of_received_msgs_obj):
             queue.put("STOP")
             break
 
-
-def configureClient():
+# InfluxDB process
+def influxBatchProcess(queue,no_of_inserted_msgs_obj):
+    
+    global inserted_msg_count
+    
     # Set up InfluxDB client
     influx_client = InfluxDBClient(
                     host='localhost',          # InfluxDB server host
                     port=8086,                 # InfluxDB server port
                     timeout=5,                 # Timeout for HTTP requests (in seconds)
                     verify_ssl=False,           # Enable SSL certificate verification
-                    gzip=True,
-                    retries=3,
-                    pool_size=100
+                    gzip=True,retries=3,pool_size=100
                     )
     influx_client.switch_database(database_name)
-    
-    return influx_client
-
-# InfluxDB process
-def influxBatchProcess(queue,no_of_inserted_msgs_obj):
-    
-    global inserted_msg_count
-    
-    influx_client = configureClient()
     
     measurement_body = []
     while True:
@@ -182,7 +174,16 @@ def influxProcess(queue,no_of_inserted_msgs_obj):
     
     global inserted_msg_count
     
-    influx_client = configureClient()
+    # Set up InfluxDB client
+    influx_client = InfluxDBClient(
+                    host='localhost',          # InfluxDB server host
+                    port=8086,                 # InfluxDB server port
+                    timeout=5,                 # Timeout for HTTP requests (in seconds)
+                    verify_ssl=False,           # Enable SSL certificate verification
+                    gzip=True,retries=3,pool_size=100
+                    )
+    
+    influx_client.switch_database(database_name)
     
     measurement_body = []
     while True:
@@ -207,7 +208,8 @@ def influxProcess(queue,no_of_inserted_msgs_obj):
         
 def extractFromDatabase():
     
-    influx_client = configureClient()
+    influx_client = InfluxDBClient(host='localhost', port=8086)
+    influx_client.switch_database(database_name)
     
     all_data_frames = [] 
      
@@ -245,7 +247,7 @@ if __name__ == '__main__':
     
     
     # Create a multiprocessing Queue for IPC
-    data_queue = multiprocessing.Queue(maxsize=9000000)
+    data_queue = multiprocessing.Queue(maxsize=9900000)
     
     no_of_received_msgs_obj = multiprocessing.Value('i', 0)
     no_of_inserted_msgs_obj = multiprocessing.Value('i', 0)
@@ -255,7 +257,7 @@ if __name__ == '__main__':
     mqtt_proc.start()
 
     # Create and start the InfluxDB process
-    influx_proc = multiprocessing.Process(target=influxProcess,args=(data_queue,no_of_inserted_msgs_obj))
+    influx_proc = multiprocessing.Process(target=influxBatchProcess,args=(data_queue,no_of_inserted_msgs_obj))
     influx_proc.start()
 
 
@@ -275,6 +277,3 @@ if __name__ == '__main__':
     print("End of program")
     
     
-    
-
-
