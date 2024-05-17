@@ -11,23 +11,27 @@ websocket_port_number = 8765
 db_batch_size = 100
 
 async def writeBatchToRedis(redis, messages_batch):
-    #Write messages batch to Redis
-    pipeline = redis.pipeline()  # Use pipeline for atomic batch write
     
-    # Add individual SET commands to the pipeline for each message
-    for msg_id, message in enumerate(messages_batch, start=1):
-        # Get the current datetime
-        now = datetime.now()
-        formatted_date_time = now.strftime("%Y-%m-%d %H:%M:%S.%f")
-        message_with_timestamp = f"{message},{formatted_date_time}"
+    batch_size = len(messages_batch)
+    starting_msg_id = await redis.incrby('message_id', batch_size) - batch_size + 1
+    
+
+    async with redis.pipeline() as pipeline:
+        for i, message in enumerate(messages_batch):
+            msg_id = starting_msg_id + i
+            
+            # Get the current datetime
+            now = datetime.now()
+            formatted_date_time = now.strftime("%Y-%m-%d %H:%M:%S.%f")
+            message_with_timestamp = f"{message},{formatted_date_time}"
         
-        # Append message to Redis pipeline
-        pipeline.set(f'message:{msg_id}', message_with_timestamp)
+            # Append message to Redis pipeline
+            pipeline.set(f'message:{msg_id}', message_with_timestamp)
     
-    # Execute the pipeline (batch write)
-    await pipeline.execute()
+        # Execute the pipeline (batch write)
+        await pipeline.execute()
     
-async def dbBatchWriter(queue):
+async def dbBatchWriter(queue,no_of_inserted_msgs_obj):
     redis = None
     
     try:    
@@ -37,7 +41,7 @@ async def dbBatchWriter(queue):
         messages_batch = []  # List to accumulate messages for batch write
         
         while True:
-            message = await queue.get()
+            message = queue.get()
             if message == "STOP":
                 print("Received STOP, shutting down db_writer.")
                 break
@@ -48,14 +52,17 @@ async def dbBatchWriter(queue):
             # Check if batch size is reached
             if len(messages_batch) >= db_batch_size:
                 await writeBatchToRedis(redis, messages_batch)
+                with no_of_inserted_msgs_obj.get_lock():
+                    no_of_inserted_msgs_obj.value += db_batch_size
                 messages_batch = []  # Reset batch
             
         # Write any remaining messages in the last batch
-        if messages_batch:
+        if len(messages_batch) > 0:
             await writeBatchToRedis(redis, messages_batch)
-      
+            with no_of_inserted_msgs_obj.get_lock():
+                no_of_inserted_msgs_obj.value += len(messages_batch)
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"An error occurred: {e} in {message}")
 
     finally:
         # Close Redis connection explicitly
@@ -101,8 +108,8 @@ async def dbWriter(queue,no_of_inserted_msgs_obj):
 def dbWriterProcess(queue,no_of_inserted_msgs_obj):
     asyncio.run(dbWriter(queue,no_of_inserted_msgs_obj))
 
-def dbBatchWriterProcess(queue):
-    asyncio.run(dbBatchWriter(queue))
+def dbBatchWriterProcess(queue,no_of_inserted_msgs_obj):
+    asyncio.run(dbBatchWriter(queue,no_of_inserted_msgs_obj))
 
 
 async def websocketServerHandler(websocket, path, queue,no_of_received_msgs_obj):

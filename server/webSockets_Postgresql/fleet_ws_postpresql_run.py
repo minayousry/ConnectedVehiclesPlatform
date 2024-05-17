@@ -120,10 +120,6 @@ async def runWebsocketServer(queue,no_of_received_msgs_obj):
 def websocketServerProcess(queue,no_of_received_msgs_obj):
     asyncio.run(runWebsocketServer(queue,no_of_received_msgs_obj))
 
-
-
-      
-
 def storeInDatabaseProcess(queue, no_of_inserted_msgs_obj):
     
     conn,cursor = connectToDatabase()
@@ -154,7 +150,7 @@ def insertRecords(conn, records):
         conn.rollback()
         print(f"Failed to insert batch: {e}")
 
-def storeInDatabaseBatchProcess(queue):
+def storeInDatabaseBatchProcess(queue, no_of_inserted_msgs_obj):
 
     conn,cursor = connectToDatabase()
 
@@ -169,6 +165,8 @@ def storeInDatabaseBatchProcess(queue):
             if data == "STOP" and records_to_insert:
                 # Insert any remaining records
                 insertRecords(conn, records_to_insert)
+                with no_of_inserted_msgs_obj.get_lock():
+                    no_of_inserted_msgs_obj.value += len(records_to_insert)
                 break
             elif data == "STOP":
                 break
@@ -177,6 +175,8 @@ def storeInDatabaseBatchProcess(queue):
             
             if len(records_to_insert) >= db_batch_size:  # Adjust batch size as appropriate
                 insertRecords(conn, records_to_insert)
+                with no_of_inserted_msgs_obj.get_lock():
+                    no_of_inserted_msgs_obj.value += db_batch_size
                 records_to_insert = []
 
     finally:

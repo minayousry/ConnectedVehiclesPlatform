@@ -12,7 +12,7 @@ import webSockets_Redis.fleet_ws_redis_run as websocket_redis
 import server_utilities as server_utilities
 
 
-enable_database_batch_inserion = False
+enable_database_batch_inserion = True
 
 def runProcesses(comm_process, database_process):
     
