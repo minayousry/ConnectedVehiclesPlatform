@@ -133,6 +133,7 @@ def recordEndreceptionStorageTime(technology):
     global mqtt_influx_end_reception_storage_time
     global qpid_cassandra_end_reception_storage_time
     global websocket_postgresql_end_reception_storage_time
+    global websocket_redis_end_reception_storage_time
     
     if technology == "kafka_greenplum":
         kafka_greenplum_end_reception_storage_time = getdatetime()
@@ -180,8 +181,12 @@ def calculatereceptionStorageDuration(technology):
         print("Invalid client name.")
         exit(1)
     
-    if start_time is None or end_time is None:
-        print("reception_storageulation start or end time is not recorded.")
+    if start_time is None:
+        print("reception stoarage start time is not recorded.")
+        return None
+    
+    if end_time is None:
+        print("reception stoarage end time is not recorded.")
         return None
         
     start_time = datetime.datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S.%f")
