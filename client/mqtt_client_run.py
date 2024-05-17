@@ -57,7 +57,8 @@ def runScenario(sumo_cmd,client):
 
                 client.publish(mqtt_topic, json.dumps(veh_data))
                 cl_utl.increaseMsgCount("mqtt")
-
+        
+        client.publish(mqtt_topic, json.dumps(["STOP"]))
     finally:
         traci.close()
 

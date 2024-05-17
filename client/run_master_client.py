@@ -1,3 +1,4 @@
+
 import argparse
 
 import client_utilities as cl_utl
@@ -7,9 +8,8 @@ import mqtt_client_run as mqtt_cl
 import qpid_client_run as qpid_cl
 import ws_client_run as ws_cl
 
-import client_utilities as cl_utl
 
-remote_machine_ip_addr = "34.147.17.84"
+remote_machine_ip_addr = "34.141.222.231"
 simulation_path = "./simulation1/"
 main_simulation_file = simulation_path+"osm.sumocfg"
 cars_simulation_file = simulation_path+"osm.passenger.trips.xml"
@@ -17,7 +17,8 @@ cars_simulation_file = simulation_path+"osm.passenger.trips.xml"
 # Confiurations for SUMO
 sumo_cmd = ["sumo", "-c", main_simulation_file]
 
-no_of_cars = 70
+no_of_cars = 100
+ 
 
 
 
@@ -75,6 +76,8 @@ if __name__ == '__main__':
 
     # Access the parsed argument
     client_tech = args.client_technology
+    
+    no_of_car_msgs = {}
     
     if client_tech in tech_list:
         result = configureNoOfCars()
