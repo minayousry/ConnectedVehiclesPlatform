@@ -6,7 +6,7 @@ keyspace_name = "obd2_database"
 table_name = "obd2_data"
 server_address = '127.0.0.1'
 
-def create_keyspace_and_table(cluster):
+def createKeyspaceAndTable(cluster):
     session = cluster.connect()
     
     # Create keyspace if it does not exist
@@ -49,18 +49,18 @@ def create_keyspace_and_table(cluster):
     session.shutdown()
 
 
-def drop_keyspace(cluster):
+def dropKeyspace(cluster):
     session = cluster.connect()
     session.execute(f"DROP KEYSPACE IF EXISTS {keyspace_name}")
     print(f"Keyspace '{keyspace_name}' has been dropped.")
     
 
 
-def createDatabase():
+def createDatabase(use_database_timestamp):
     try:
         cluster = Cluster([server_address])
-        drop_keyspace(cluster)
-        create_keyspace_and_table(cluster)
+        dropKeyspace(cluster)
+        createKeyspaceAndTable(cluster)
         cluster.shutdown()
         return True
     except Exception as e:
@@ -68,4 +68,6 @@ def createDatabase():
         return False
 
 if __name__ == "__main__":
-    createDatabase()
+    use_database_timestamp = False
+    
+    createDatabase(use_database_timestamp)

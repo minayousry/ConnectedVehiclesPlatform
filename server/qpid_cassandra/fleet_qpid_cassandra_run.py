@@ -88,7 +88,7 @@ def receiverProcess(queue, no_of_received_msgs):
     container.run()
     
     
-def databaseProcess(queue,no_of_inserted_msgs):
+def databaseProcess(queue,no_of_inserted_msgs,use_database_timestamp):
     
     global inserted_msg_count
     
@@ -143,7 +143,7 @@ def insertBatch(session, batch,insert_query):
                                         message[9], message[10], message[11], message[12], message[13], \
                                         message[14], timestamp))      
 
-def databaseBatchProcess(queue,no_of_inserted_msgs):
+def databaseBatchProcess(queue,no_of_inserted_msgs,use_database_timestamp):
     
     global inserted_msg_count
     
@@ -191,7 +191,7 @@ def databaseBatchProcess(queue,no_of_inserted_msgs):
         cluster.shutdown()
 
   
-def extractFromDatabase():
+def extractFromDatabase(use_database_timestamp):
     
     result = None
     cluster = None
