@@ -19,7 +19,7 @@ def resetDatabase(client):
     client.switch_database(database_name)
     print(f"Database '{database_name}' created.")
 
-def createDatabase():
+def createDatabase(use_database_timestamp):
     try:
         client = InfluxDBClient(server_address, port)
         print(f"Connected to InfluxDB server at {server_address}:{port}")
@@ -33,4 +33,5 @@ def createDatabase():
     
 if __name__ == "__main__":
     print("Creating database...")
-    createDatabase()
+    use_database_timestamp = True
+    createDatabase(use_database_timestamp)

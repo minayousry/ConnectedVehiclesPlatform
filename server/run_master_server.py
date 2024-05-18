@@ -62,11 +62,11 @@ def runProcesses(comm_process, database_process):
 def createReport(database_extract_func,generation_path,server_tech):
     
     print("Extracting information from the database...")
-    extracted_df = database_extract_func()
+    extracted_df = database_extract_func(cfg.use_database_timestamp)
     
     if extracted_df is not None:
         print("Creating excel file...")
-        server_utilities.createExcelFile(extracted_df,generation_path,server_tech,cfg.enable_database_batch_inserion)
+        server_utilities.createExcelFile(extracted_df,generation_path,server_tech)
     
 
 
@@ -167,7 +167,7 @@ if __name__ == '__main__':
             server_utilities.setReceivedMsgCount(server_tech,no_of_received_msgs)
             server_utilities.setInsertedMsgCount(server_tech,no_of_inserted_records)
             server_utilities.createProfilingReport(server_tech)
-            createReport(database_extract_func,generation_path,server_tech,)
+            createReport(database_extract_func,generation_path,server_tech)
 
         else:
             print("Processes have terminated for some errors.")

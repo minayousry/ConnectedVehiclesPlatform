@@ -135,7 +135,7 @@ def closeDatabaseConnection(cursor,conn):
     cursor.close()
     conn.close()
       
-def extractFromDatabase():
+def extractFromDatabase(use_database_timestamp):
 
     conn,cursor = connectToDatabase()
 

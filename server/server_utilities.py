@@ -6,6 +6,8 @@ import requests
 import datetime
 import pytz
 
+import configurations as cfg
+
 # Global variables
 kafka_greenplum_received_msg_count = 0
 mqtt_influx_received_msg_count = 0
@@ -243,7 +245,7 @@ def createProfilingReport(technology):
     print(f"Reception and storage duration: {reception_storage_duration} seconds")
     
 
-def createExcelFile(obd2_data_frame,generation_path,server_tech,is_batch_enabled):
+def createExcelFile(obd2_data_frame,generation_path,server_tech):
 
     try:
         if(obd2_data_frame is None):
@@ -261,11 +263,12 @@ def createExcelFile(obd2_data_frame,generation_path,server_tech,is_batch_enabled
         if type(obd2_data_frame['tx_time'].iloc[0]) == str:
             print("Converting tx time to datetime")
             obd2_data_frame['tx_time'] = pd.to_datetime(obd2_data_frame['tx_time'], format='%Y-%m-%d %H:%M:%S.%f')
-        
+
         if type(obd2_data_frame['storage_time'].iloc[0]) == str:
             print("Converting storage time to datetime")
             obd2_data_frame['storage_time'] = pd.to_datetime(obd2_data_frame['storage_time'], format='%Y-%m-%d %H:%M:%S.%f')
-    
+
+        
         print("Calculating time difference")
         time_diff = obd2_data_frame['storage_time'] - obd2_data_frame['tx_time']
         
@@ -274,7 +277,7 @@ def createExcelFile(obd2_data_frame,generation_path,server_tech,is_batch_enabled
         
         file_name = generation_path+server_tech
         
-        if is_batch_enabled:
+        if cfg.enable_database_batch_inserion:
             file_name += "_batched"
         
         file_name += "_obd2_data_report.xlsx"

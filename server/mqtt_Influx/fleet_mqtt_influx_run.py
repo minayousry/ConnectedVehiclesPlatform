@@ -22,6 +22,13 @@ start_time = time.time()
 
 is_msg_received = False
 
+
+
+def getcurrentTimestamp():
+    now = datetime.now()
+    formatted_date_time = now.strftime("%Y-%m-%d %H:%M:%S.%f")
+    return formatted_date_time  
+
 # MQTT callback functions
 def on_connect(client, userdata, flags, rc):
     print("Listening for MQTT messages...")
@@ -73,13 +80,7 @@ def mqttProcess(queue,no_of_received_msgs_obj):
     mqtt_client.loop_start()
     
 
-    while True:
-            
-        current_time = time.time()
-        time_diff = current_time - start_time
-        #print(time_diff)
-        
-        
+    while True:        
         
         if (is_msg_received and (queue.empty())):
             global received_msg_count
@@ -91,7 +92,7 @@ def mqttProcess(queue,no_of_received_msgs_obj):
             break
 
 # InfluxDB process
-def influxBatchProcess(queue,no_of_inserted_msgs_obj):
+def influxBatchProcess(queue,no_of_inserted_msgs_obj,use_database_timestamp):
     
     global inserted_msg_count
     
@@ -109,7 +110,7 @@ def influxBatchProcess(queue,no_of_inserted_msgs_obj):
     while True:
         data_list = queue.get()  # Get the data from the queue
         if data_list is not None and data_list != "STOP":   
-            measurement = getMeasurement(inserted_msg_count,data_list)
+            measurement = getMeasurement(inserted_msg_count,data_list,use_database_timestamp)
             measurement_body.append(measurement)
             inserted_msg_count += 1
             
@@ -131,11 +132,36 @@ def influxBatchProcess(queue,no_of_inserted_msgs_obj):
     influx_client.close()
     
     
-def getMeasurement(msg_id,data_list):
+def getMeasurement(msg_id,data_list,use_database_timestamp):
     
-    measurement = {
-        "measurement": str(msg_id),
-        "fields": {
+    measurement = {}
+    
+    if use_database_timestamp:
+        measurement = {
+            "measurement": str(msg_id),
+            "fields": {
+            "vehicle_id": data_list[0].replace('[',''),
+            "tx_time": data_list[1],
+            "x_pos": float(data_list[2]),
+            "y_pos": float(data_list[3]),
+            "gps_lon": float(data_list[4]),
+            "gps_lat": float(data_list[5]),
+            "speed": float(data_list[6]),
+            "road_id": data_list[7],
+            "lane_id": data_list[8],
+            "displacement": float(data_list[9]),
+            "turn_angle": float(data_list[10]),
+            "acceleration": float(data_list[11]),
+            "fuel_consumption": float(data_list[12]),
+            "co2_consumption": float(data_list[13]),
+            "deceleration": float(data_list[14].replace(']',''))
+            }
+        }
+    else:
+        current_timestamp = getcurrentTimestamp()
+        measurement = {
+            "measurement": str(msg_id),
+            "fields": {
             "vehicle_id": data_list[0].replace('[',''),
             "tx_time": data_list[1],
             "x_pos": float(data_list[2]),
@@ -151,9 +177,9 @@ def getMeasurement(msg_id,data_list):
             "fuel_consumption": float(data_list[12]),
             "co2_consumption": float(data_list[13]),
             "deceleration": float(data_list[14].replace(']','')),
-            #"storage_time": str(formatted_time)
+            "storage_time": current_timestamp
+            }
         }
-    }
     
     return measurement    
 
@@ -170,9 +196,10 @@ def get_line_protocol(msg_id, data_list):
     ])
     return f"{msg_id} {fields}"
     
-def influxProcess(queue,no_of_inserted_msgs_obj):
+def influxProcess(queue,no_of_inserted_msgs_obj,use_database_timestamp):
     
     global inserted_msg_count
+    
     
     # Set up InfluxDB client
     influx_client = InfluxDBClient(
@@ -189,7 +216,7 @@ def influxProcess(queue,no_of_inserted_msgs_obj):
     while True:
         data_list = queue.get()  # Get the data from the queue
         if data_list is not None and data_list != "STOP":
-            measurement = getMeasurement(inserted_msg_count,data_list)
+            measurement = getMeasurement(inserted_msg_count,data_list,use_database_timestamp)
             try:
                 influx_client.write_points([measurement])
                 inserted_msg_count += 1
@@ -206,7 +233,9 @@ def influxProcess(queue,no_of_inserted_msgs_obj):
     influx_client.close()    
     
         
-def extractFromDatabase():
+def extractFromDatabase(use_database_timestamp):
+    
+    global is_database_timestamp_used
     
     influx_client = InfluxDBClient(host='localhost', port=8086)
     influx_client.switch_database(database_name)
@@ -229,13 +258,15 @@ def extractFromDatabase():
         
     df = pd.DataFrame(dict_list)
     
+    
     df['tx_time'] = df['tx_time'].str.replace('\"','').str.strip()
     
-    
-    # Convert 'time' column to datetime format with timezone specifier 'Z'
-    df['storage_time'] = pd.to_datetime(df['time'], format="%Y-%m-%dT%H:%M:%S.%fZ")
-    
-    df['storage_time'] = pd.to_datetime(df['storage_time'], format='%Y-%m-%d %H:%M:%S.%f')
+    if use_database_timestamp:
+        print("using database timestamp")
+        # Convert 'time' column to datetime format with timezone specifier 'Z'
+        df['storage_time'] = pd.to_datetime(df['time'], format="%Y-%m-%dT%H:%M:%S.%fZ")
+        df['storage_time'] = pd.to_datetime(df['storage_time'], format='%Y-%m-%d %H:%M:%S.%f')
+        
 
     influx_client.close()
     
@@ -252,12 +283,14 @@ if __name__ == '__main__':
     no_of_received_msgs_obj = multiprocessing.Value('i', 0)
     no_of_inserted_msgs_obj = multiprocessing.Value('i', 0)
 
+    use_database_timestamp = True
+    
     # Create and start the MQTT process
     mqtt_proc = multiprocessing.Process(target=mqttProcess,args=(data_queue,no_of_received_msgs_obj))
     mqtt_proc.start()
 
     # Create and start the InfluxDB process
-    influx_proc = multiprocessing.Process(target=influxBatchProcess,args=(data_queue,no_of_inserted_msgs_obj))
+    influx_proc = multiprocessing.Process(target=influxBatchProcess,args=(data_queue,no_of_inserted_msgs_obj,use_database_timestamp))
     influx_proc.start()
 
 
