@@ -11,8 +11,8 @@ import webSockets_Redis.fleet_ws_redis_run as websocket_redis
 #import utilities
 import server_utilities as server_utilities
 
+import configurations as cfg
 
-enable_database_batch_inserion = True
 
 def runProcesses(comm_process, database_process):
     
@@ -21,18 +21,18 @@ def runProcesses(comm_process, database_process):
     no_of_received_msgs_obj = multiprocessing.Value('i', 0)
     no_of_inserted_msgs_obj = multiprocessing.Value('i', 0)
     
-    total_size_bytes = 9 * 1024 * 1024  # 9 GB
+    total_size_bytes = 9900000
     
     try:
         # Create a multiprocessing Queue for IPC
-        data_queue = multiprocessing.Queue(maxsize=9900000)
+        data_queue = multiprocessing.Queue(maxsize=total_size_bytes)
             
         # Create and start the communication process
         comm_proc = multiprocessing.Process(target=comm_process, args=(data_queue,no_of_received_msgs_obj))
         comm_proc.start()
         
         # Create and start the database process
-        db_proc = multiprocessing.Process(target=database_process, args=(data_queue,no_of_inserted_msgs_obj))
+        db_proc = multiprocessing.Process(target=database_process, args=(data_queue,no_of_inserted_msgs_obj,cfg.use_database_timestamp))
         db_proc.start()
         
         # Wait for both processes to finish
@@ -66,7 +66,7 @@ def createReport(database_extract_func,generation_path,server_tech):
     
     if extracted_df is not None:
         print("Creating excel file...")
-        server_utilities.createExcelFile(extracted_df,generation_path,server_tech,enable_database_batch_inserion)
+        server_utilities.createExcelFile(extracted_df,generation_path,server_tech,cfg.enable_database_batch_inserion)
     
 
 
@@ -104,7 +104,7 @@ if __name__ == '__main__':
     if server_tech == "kafka_greenplum":
         comm_process = kafka_gp.kafkaConsumerProcess
         
-        if enable_database_batch_inserion:
+        if cfg.enable_database_batch_inserion:
             database_process = kafka_gp.storeInDatabaseBatchProcess
         else:
             database_process = kafka_gp.storeInDatabaseProcess
@@ -115,7 +115,7 @@ if __name__ == '__main__':
     elif server_tech == "mqtt_influx":
         comm_process = mqtt_influx.mqttProcess
         
-        if enable_database_batch_inserion:
+        if cfg.enable_database_batch_inserion:
             database_process = mqtt_influx.influxBatchProcess
         else:
             database_process = mqtt_influx.influxProcess
@@ -126,7 +126,7 @@ if __name__ == '__main__':
     elif server_tech == "qpid_cassandra":
         comm_process = qpid_cassandra.receiverProcess
         
-        if enable_database_batch_inserion:
+        if cfg.enable_database_batch_inserion:
             database_process = qpid_cassandra.databaseBatchProcess
         else:
             database_process = qpid_cassandra.databaseProcess
@@ -138,7 +138,7 @@ if __name__ == '__main__':
     elif server_tech == "websocket_postgresql":
         comm_process = websocket_postgresql.websocketServerProcess
         
-        if enable_database_batch_inserion:
+        if cfg.enable_database_batch_inserion:
             database_process = websocket_postgresql.storeInDatabaseBatchProcess
         else:
             database_process = websocket_postgresql.storeInDatabaseProcess
@@ -149,7 +149,7 @@ if __name__ == '__main__':
         
     elif server_tech == "websocket_redis":
         comm_process = websocket_redis.websocketServerProcess
-        if enable_database_batch_inserion:
+        if cfg.enable_database_batch_inserion:
             database_process = websocket_redis.dbBatchWriterProcess
         else:
             database_process = websocket_redis.dbWriterProcess

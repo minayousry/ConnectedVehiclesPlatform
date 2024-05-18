@@ -19,30 +19,35 @@ dbname = "OBD2_Data_Fleet_database"
 table_name = "OBD2_table"
 db_batch_size = 100
 
-def createTable(cursor):
+def createTable(cursor,use_database_timestamp):
 
-    # Create a table
-    cursor.execute(f"""
-        CREATE TABLE IF NOT EXISTS {table_name} (
-        id SERIAL PRIMARY KEY,
-        vehicle_id TEXT,
-        tx_time TIMESTAMP WITHOUT TIME ZONE,
-        x_pos DOUBLE PRECISION,
-        y_pos DOUBLE PRECISION,
-        gps_lon DOUBLE PRECISION,
-        gps_lat DOUBLE PRECISION,
-        speed DOUBLE PRECISION,
-        road_id TEXT,
-        lane_id TEXT,
-        displacement DOUBLE PRECISION,
-        turn_angle DOUBLE PRECISION,
-        acceleration DOUBLE PRECISION,
-        fuel_consumption DOUBLE PRECISION,
-        co2_consumption DOUBLE PRECISION,
-        deceleration DOUBLE PRECISION,
-        storage_time TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP                   
-        );
-    """)    
+    sql_creation_query = f"""
+                            CREATE TABLE IF NOT EXISTS {table_name} (
+                            id SERIAL PRIMARY KEY,
+                            vehicle_id TEXT,
+                            tx_time TIMESTAMP WITHOUT TIME ZONE,
+                            x_pos DOUBLE PRECISION,
+                            y_pos DOUBLE PRECISION,
+                            gps_lon DOUBLE PRECISION,
+                            gps_lat DOUBLE PRECISION,
+                            speed DOUBLE PRECISION,
+                            road_id TEXT,
+                            lane_id TEXT,
+                            displacement DOUBLE PRECISION,
+                            turn_angle DOUBLE PRECISION,
+                            acceleration DOUBLE PRECISION,
+                            fuel_consumption DOUBLE PRECISION,
+                            co2_consumption DOUBLE PRECISION,
+                            deceleration DOUBLE PRECISION,
+                            storage_time TIMESTAMP WITHOUT TIME ZONE """
+                            
+    if use_database_timestamp:
+        sql_creation_query += "DEFAULT CURRENT_TIMESTAMP"
+        
+    sql_creation_query += ");"
+    
+    cursor.execute(sql_creation_query)
+
 
 def connectToDatabase():
     conn = psycopg2.connect(dbname=dbname, user=user, password=password, host=host, port=port)
@@ -99,7 +104,7 @@ def clearTable(conn,cursor):
         print(f"An error occurred: {e}")
 
 
-def createDatabase():
+def createDatabase(use_database_timestamp):
     CreateDatabaseifNotExists()
     conn,cursor = connectToDatabase()
 
@@ -107,7 +112,7 @@ def createDatabase():
     conn.autocommit = False
    
     try:     
-        createTable(cursor)
+        createTable(cursor,use_database_timestamp)
         clearTable(conn,cursor)
         closeDatabaseConnection(cursor,conn)
         return True
@@ -117,6 +122,7 @@ def createDatabase():
 
 
 if __name__ == "__main__":
-    createDatabase()
+    use_database_timestamp = True
+    createDatabase(use_database_timestamp)
     
     

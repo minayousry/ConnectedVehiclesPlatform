@@ -44,6 +44,7 @@ def runScenario(sumo_cmd,producer):
                      
                 producer.send(topic_name, value=veh_data)
                 cl_utl.increaseMsgCount("kafka")            
+        producer.send(topic_name, value=["STOP"])
         traci.close()
         
     except Exception as e:

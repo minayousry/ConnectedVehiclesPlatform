@@ -7,6 +7,7 @@ import qpid_cassandra.cassandra_create_db as cassandra_db
 import webSockets_Postgresql.postgresql_create_db as postgresql_db
 import webSockets_Redis.redis_create_db as redis_db
 import asyncio
+import configurations as cfg
    
 if __name__ == '__main__':
     
@@ -38,9 +39,9 @@ if __name__ == '__main__':
  
     try:
         if database_technology == "redis":
-          result = asyncio.run(database_create_func())
+          result = asyncio.run(database_create_func(cfg.use_database_timestamp))
         else: 
-            result = database_create_func()
+            result = database_create_func(cfg.use_database_timestamp)
             
         if result:
             print("Database created successfully.")

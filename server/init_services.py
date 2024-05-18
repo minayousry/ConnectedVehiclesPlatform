@@ -12,7 +12,7 @@ import qpid_cassandra.cassandra_create_db as cassandra_db
 import webSockets_Postgresql.postgresql_create_db as postgresql_db
 import webSockets_Redis.redis_create_db as redis_db
 
-#For kafka configurations
+import configurations as cfg
 
 
 
@@ -119,9 +119,9 @@ if __name__ == '__main__':
         if result:
             print("Servers are running.")
             if(server_tech == "websocket_redis"):
-                result = asyncio.run(database_create_func())
+                result = asyncio.run(database_create_func(cfg.use_database_timestamp))
             else:
-                result = database_create_func()
+                result = database_create_func(cfg.use_database_timestamp)
         else:
             print("Failed to run servers.")
             exit(1)

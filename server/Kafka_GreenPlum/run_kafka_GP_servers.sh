@@ -5,7 +5,7 @@ echo "Starting Zookeeper..."
 zookeeper-server-start.sh $HOME/kafka/config/zookeeper.properties &
 
 # Wait a bit for Zookeeper to fully start
-sleep 10
+sleep 30
 
 # Start Kafka
 echo "Starting Kafka..."
