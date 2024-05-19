@@ -275,6 +275,7 @@ def createExcelFile(obd2_data_frame,generation_path,server_tech):
         # Convert time difference to seconds (assuming all values are valid)
         obd2_data_frame['time_diff_seconds'] = time_diff.dt.total_seconds().abs()
         
+        print(f"Average diff time:{obd2_data_frame['time_diff_seconds'].mean()}")
         file_name = generation_path+server_tech
         
         if cfg.enable_database_batch_inserion:

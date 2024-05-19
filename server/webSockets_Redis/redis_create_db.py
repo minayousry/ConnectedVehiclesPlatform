@@ -1,7 +1,7 @@
 import aioredis
 import asyncio
 
-async def createDatabase():
+async def createDatabase(use_database_timestamp):
     try:
         # Connect to Redis using the new aioredis 2.0 syntax
         redis = await aioredis.from_url('redis://localhost', encoding="utf-8", decode_responses=True)
@@ -15,4 +15,5 @@ async def createDatabase():
 
 
 if __name__ == "__main__":
-    asyncio.run(createDatabase())
+    use_database_timestamp = True
+    asyncio.run(createDatabase(use_database_timestamp))

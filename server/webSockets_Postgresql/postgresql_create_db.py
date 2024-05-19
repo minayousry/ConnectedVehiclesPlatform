@@ -12,30 +12,34 @@ password = "guest"
 new_username = 'guest'
 
 
-def createTable(cursor):
+def createTable(cursor,use_database_timestamp):
 
-    # Create a table
-    cursor.execute(f"""
-        CREATE TABLE IF NOT EXISTS {table_name} (
-        id SERIAL PRIMARY KEY,
-        vehicle_id TEXT,
-        tx_time TIMESTAMP WITHOUT TIME ZONE,
-        x_pos DOUBLE PRECISION,
-        y_pos DOUBLE PRECISION,
-        gps_lon DOUBLE PRECISION,
-        gps_lat DOUBLE PRECISION,
-        speed DOUBLE PRECISION,
-        road_id TEXT,
-        lane_id TEXT,
-        displacement DOUBLE PRECISION,
-        turn_angle DOUBLE PRECISION,
-        acceleration DOUBLE PRECISION,
-        fuel_consumption DOUBLE PRECISION,
-        co2_consumption DOUBLE PRECISION,
-        deceleration DOUBLE PRECISION,
-        storage_time TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP                   
-        );
-    """)   
+    sql_creation_query = f"""
+                            CREATE TABLE IF NOT EXISTS {table_name} (
+                            id SERIAL PRIMARY KEY,
+                            vehicle_id TEXT,
+                            tx_time TIMESTAMP WITHOUT TIME ZONE,
+                            x_pos DOUBLE PRECISION,
+                            y_pos DOUBLE PRECISION,
+                            gps_lon DOUBLE PRECISION,
+                            gps_lat DOUBLE PRECISION,
+                            speed DOUBLE PRECISION,
+                            road_id TEXT,
+                            lane_id TEXT,
+                            displacement DOUBLE PRECISION,
+                            turn_angle DOUBLE PRECISION,
+                            acceleration DOUBLE PRECISION,
+                            fuel_consumption DOUBLE PRECISION,
+                            co2_consumption DOUBLE PRECISION,
+                            deceleration DOUBLE PRECISION,
+                            storage_time TIMESTAMP WITHOUT TIME ZONE """
+                            
+    if use_database_timestamp:
+        sql_creation_query += "DEFAULT CURRENT_TIMESTAMP"
+        
+    sql_creation_query += ");"
+    
+    cursor.execute(sql_creation_query)
 
 
 def clearTable(conn,cursor):
@@ -55,7 +59,7 @@ def clearTable(conn,cursor):
     except Exception as e:
         print(f"An error occurred: {e}")
         
-def createDatabase():
+def createDatabase(use_database_timestamp):
     
     connection = psycopg2.connect(host=server_address, port=port, user=username, password=password,dbname=default_database_name)
     
@@ -87,7 +91,7 @@ def createDatabase():
         cursor = connection.cursor()
         
         if database_exist:    
-            createTable(cursor)
+            createTable(cursor,use_database_timestamp)
             clearTable(connection,cursor)
         
         # Commit the transaction
@@ -128,6 +132,7 @@ def createDatabase():
     return result
 
 if __name__ == "__main__":
-    createDatabase()
+    use_database_timestamp = True
+    createDatabase(use_database_timestamp)
     
 
