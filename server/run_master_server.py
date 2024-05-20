@@ -19,6 +19,7 @@ def runProcesses(comm_process, database_process):
     result = False
 
     no_of_received_msgs_obj = multiprocessing.Value('i', 0)
+    no_of_sent_msgs_obj = multiprocessing.Value('i', 0)
     no_of_inserted_msgs_obj = multiprocessing.Value('i', 0)
     
     total_size_bytes = 9900000
@@ -28,7 +29,7 @@ def runProcesses(comm_process, database_process):
         data_queue = multiprocessing.Queue(maxsize=total_size_bytes)
             
         # Create and start the communication process
-        comm_proc = multiprocessing.Process(target=comm_process, args=(data_queue,no_of_received_msgs_obj))
+        comm_proc = multiprocessing.Process(target=comm_process, args=(data_queue,no_of_received_msgs_obj,no_of_sent_msgs_obj))
         comm_proc.start()
         
         # Create and start the database process
@@ -56,7 +57,9 @@ def runProcesses(comm_process, database_process):
         print(f"An error occurred: {e}")
         result = False
     finally:
-        return result,no_of_received_msgs_obj.value,no_of_inserted_msgs_obj.value
+        return result,no_of_received_msgs_obj.value,no_of_sent_msgs_obj.value,no_of_inserted_msgs_obj.value
+
+
 
 
 def createReport(database_extract_func,generation_path,server_tech):
@@ -159,12 +162,13 @@ if __name__ == '__main__':
  
     try:
         
-        result,no_of_received_msgs,no_of_inserted_records = runProcesses(comm_process, database_process)
+        result,no_of_received_msgs,no_of_sent_msgs,no_of_inserted_records = runProcesses(comm_process, database_process)
         
         if result:
             print("Processes have finished successfully.")
             server_utilities.recordEndreceptionStorageTime(server_tech)
             server_utilities.setReceivedMsgCount(server_tech,no_of_received_msgs)
+            server_utilities.setSentMsgCount(server_tech,no_of_sent_msgs)
             server_utilities.setInsertedMsgCount(server_tech,no_of_inserted_records)
             server_utilities.createProfilingReport(server_tech)
             createReport(database_extract_func,generation_path,server_tech)

@@ -21,6 +21,7 @@ db_batch_size = 100
 
 def createTable(cursor,use_database_timestamp):
 
+    print("Create Table")
     sql_creation_query = f"""
                             CREATE TABLE IF NOT EXISTS {table_name} (
                             id SERIAL PRIMARY KEY,
@@ -39,6 +40,7 @@ def createTable(cursor,use_database_timestamp):
                             fuel_consumption DOUBLE PRECISION,
                             co2_consumption DOUBLE PRECISION,
                             deceleration DOUBLE PRECISION,
+                            rx_time TIMESTAMP WITHOUT TIME ZONE,
                             storage_time TIMESTAMP WITHOUT TIME ZONE """
                             
     if use_database_timestamp:

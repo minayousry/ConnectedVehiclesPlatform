@@ -15,6 +15,7 @@ port_no = 1883
 mqtt_comm_timeout = 5
 socket_closed = False
 
+sent_msg_count = 0
 received_msg_count = 0
 inserted_msg_count = 0
 
@@ -39,6 +40,7 @@ def on_message(client, userdata, msg,queue):
     global start_time
     global is_msg_received
     global received_msg_count
+    global sent_msg_count
     
     # Get the current time in seconds
     start_time = time.time()
@@ -49,7 +51,8 @@ def on_message(client, userdata, msg,queue):
     if data_list[0] != '["STOP"]':
         queue.put(data_list)  # Put the data into the queue
         received_msg_count += 1  
-    else:    
+    else:
+        sent_msg_count = 0   
         is_msg_received = True
     
     

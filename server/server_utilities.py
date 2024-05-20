@@ -9,17 +9,23 @@ import pytz
 import configurations as cfg
 
 # Global variables
-kafka_greenplum_received_msg_count = 0
-mqtt_influx_received_msg_count = 0
-qpid_cassandra_received_msg_count = 0
-websocket_postgresql_received_msg_count = 0
-websocket_redis_received_msg_count = 0
+kafka_received_msg_count = 0
+mqtt_received_msg_count = 0
+qpid_received_msg_count = 0
+ws_received_msg_count = 0
 
-kafka_greenplum_inserted_msg_count = 0
-mqtt_influx_inserted_msg_count = 0
-qpid_cassandra_inserted_msg_count = 0
-websocket_postgresql_inserted_msg_count = 0
-websocket_redis_inserted_msg_count = 0
+kafka_sent_msg_count = 0
+mqtt_sent_msg_count = 0
+qpid_sent_msg_count = 0
+ws_sent_msg_count = 0
+
+greenplum_inserted_msg_count = 0
+influx_inserted_msg_count = 0
+cassandra_inserted_msg_count = 0
+postgresql_inserted_msg_count = 0
+redis_inserted_msg_count = 0
+
+
 
 
 kafka_greenplum_start_reception_storage_time = None
@@ -45,64 +51,83 @@ def getdatetime():
     return DATIME
 
 def resetMsgCount(technology):
-    global kafka_greenplum_received_msg_count
-    global mqtt_influx_received_msg_count
-    global qpid_cassandra_received_msg_count
-    global websocket_postgresql_received_msg_count
-    global websocket_redis_received_msg_count
+    global kafka_received_msg_count
+    global mqtt_received_msg_count
+    global qpid_received_msg_count
+    global ws_received_msg_count
 
     if technology == "kafka_greenplum":
-        kafka_greenplum_received_msg_count = 0
+        kafka_received_msg_count = 0
     elif technology == "mqtt_influx":
-        mqtt_influx_received_msg_count = 0
+        mqtt_received_msg_count = 0
     elif technology == "qpid_cassandra":
-        qpid_cassandra_received_msg_count = 0
+        qpid_received_msg_count = 0
     elif technology == "websocket_postgresql":
-        websocket_postgresql_received_msg_count = 0
+        ws_received_msg_count = 0
     elif technology == "websocket_redis":
-        websocket_redis_received_msg_count = 0
+        ws_received_msg_count = 0
     else:
         print("Invalid client name.")
         exit(1)
 
 def setReceivedMsgCount(technology, count):
-    global kafka_greenplum_received_msg_count
-    global mqtt_influx_received_msg_count
-    global qpid_cassandra_received_msg_count
-    global websocket_postgresql_received_msg_count
-    global websocket_redis_received_msg_count
+    global kafka_received_msg_count
+    global mqtt_received_msg_count
+    global qpid_received_msg_count
+    global ws_received_msg_count
 
     if technology == "kafka_greenplum":
-        kafka_greenplum_received_msg_count = count
+        kafka_received_msg_count = count
     elif technology == "mqtt_influx":
-        mqtt_influx_received_msg_count = count
+        mqtt_received_msg_count = count
     elif technology == "qpid_cassandra":
-        qpid_cassandra_received_msg_count = count
+        qpid_received_msg_count = count
     elif technology == "websocket_postgresql":
-        websocket_postgresql_received_msg_count = count
+        ws_received_msg_count = count
     elif technology == "websocket_redis":
-        websocket_redis_received_msg_count = count
+        ws_received_msg_count = count
     else:
         print("setReceivedMsgCount:Unknown Technology")
         exit(1)
 
-def setInsertedMsgCount(technology, count):
-    global kafka_greenplum_inserted_msg_count
-    global mqtt_influx_inserted_msg_count
-    global qpid_cassandra_inserted_msg_count
-    global websocket_postgresql_inserted_msg_count
-    global websocket_redis_inserted_msg_count
+def setSentMsgCount(technology, count):
+    global kafka_sent_msg_count
+    global mqtt_sent_msg_count
+    global qpid_sent_msg_count
+    global ws_sent_msg_count
 
     if technology == "kafka_greenplum":
-        kafka_greenplum_inserted_msg_count = count
+        kafka_sent_msg_count = count
     elif technology == "mqtt_influx":
-        mqtt_influx_inserted_msg_count = count
+        mqtt_sent_msg_count = count
     elif technology == "qpid_cassandra":
-        qpid_cassandra_inserted_msg_count = count
+        qpid_sent_msg_count = count
     elif technology == "websocket_postgresql":
-        websocket_postgresql_inserted_msg_count = count
+        ws_sent_msg_count = count
     elif technology == "websocket_redis":
-        websocket_redis_inserted_msg_count = count
+        ws_sent_msg_count = count
+    else:
+        print("setSentMsgCount:Unknown Technology")
+        exit(1)
+
+
+def setInsertedMsgCount(technology, count):
+    global greenplum_inserted_msg_count
+    global influx_inserted_msg_count
+    global cassandra_inserted_msg_count
+    global postgresql_inserted_msg_count
+    global redis_inserted_msg_count
+
+    if technology == "kafka_greenplum":
+        greenplum_inserted_msg_count = count
+    elif technology == "mqtt_influx":
+        influx_inserted_msg_count = count
+    elif technology == "qpid_cassandra":
+        cassandra_inserted_msg_count = count
+    elif technology == "websocket_postgresql":
+        postgresql_inserted_msg_count = count
+    elif technology == "websocket_redis":
+        redis_inserted_msg_count = count
     else:
         print("setInsertedMsgCount:Unknown Technology")
         exit(1)
@@ -202,17 +227,16 @@ def calculatereceptionStorageDuration(technology):
      
 #report all information about the server performance behaviour        
 def createProfilingReport(technology):
-    global kafka_greenplum_received_msg_count
-    global mqtt_influx_received_msg_count
-    global qpid_cassandra_received_msg_count
-    global websocket_postgresql_received_msg_count
-    global websocket_redis_received_msg_count
+    global kafka_received_msg_count
+    global mqtt_received_msg_count
+    global qpid_received_msg_count
+    global ws_received_msg_count
     
-    global kafka_greenplum_inserted_msg_count
-    global mqtt_influx_inserted_msg_count
-    global qpid_cassandra_inserted_msg_count
-    global websocket_postgresql_inserted_msg_count
-    global websocket_redis_inserted_msg_count
+    global greenplum_inserted_msg_count
+    global influx_inserted_msg_count
+    global cassandra_inserted_msg_count
+    global postgresql_inserted_msg_count
+    global redis_inserted_msg_count
 
     reception_storage_duration = None
     received_msg_count = None
@@ -224,20 +248,20 @@ def createProfilingReport(technology):
     else:
         reception_storage_duration = calculatereceptionStorageDuration(technology)
         if technology == "kafka_greenplum":
-            received_msg_count = kafka_greenplum_received_msg_count
-            inserted_msg_count = kafka_greenplum_inserted_msg_count
+            received_msg_count = kafka_received_msg_count
+            inserted_msg_count = greenplum_inserted_msg_count
         elif technology == "mqtt_influx":
-            received_msg_count = mqtt_influx_received_msg_count
-            inserted_msg_count = mqtt_influx_inserted_msg_count
+            received_msg_count = mqtt_received_msg_count
+            inserted_msg_count = influx_inserted_msg_count
         elif technology == "qpid_cassandra":
-            received_msg_count = qpid_cassandra_received_msg_count
-            inserted_msg_count = qpid_cassandra_inserted_msg_count
+            received_msg_count = qpid_received_msg_count
+            inserted_msg_count = cassandra_inserted_msg_count
         elif technology == "websocket_postgresql":
-            received_msg_count = websocket_postgresql_received_msg_count
-            inserted_msg_count = websocket_postgresql_inserted_msg_count
+            received_msg_count = ws_received_msg_count
+            inserted_msg_count = postgresql_inserted_msg_count
         elif technology == "websocket_redis":
-            received_msg_count = websocket_redis_received_msg_count
-            inserted_msg_count = websocket_redis_inserted_msg_count
+            received_msg_count = ws_received_msg_count
+            inserted_msg_count = redis_inserted_msg_count
             
     
     print(f"No of Received messages: {received_msg_count}")
@@ -270,12 +294,30 @@ def createExcelFile(obd2_data_frame,generation_path,server_tech):
 
         
         print("Calculating time difference")
+        
+        
+        comm_latency_sec = obd2_data_frame['rx_time'] - obd2_data_frame['tx_time']
+        obd2_data_frame['comm_latency_sec'] = comm_latency_sec.dt.total_seconds().abs()
+        print(f"Average communication latency:{obd2_data_frame['comm_latency_sec'].mean()}")
+        
+        
+        write_latency_sec = obd2_data_frame['storage_time'] - obd2_data_frame['rx_time']
+        obd2_data_frame['write_latency_sec'] = write_latency_sec.dt.total_seconds().abs()
+        print(f"Average write latency:{obd2_data_frame['write_latency_sec'].mean()}")
+        
+        obd2_data_frame['transaction_latency_sec'] = obd2_data_frame['comm_latency_sec'] + obd2_data_frame['write_latency_sec']
+        print(f"Average transaction latency:{obd2_data_frame['transaction_latency_sec'].mean()}")
+        
+        
+        
+        """ 
         time_diff = obd2_data_frame['storage_time'] - obd2_data_frame['tx_time']
         
         # Convert time difference to seconds (assuming all values are valid)
         obd2_data_frame['time_diff_seconds'] = time_diff.dt.total_seconds().abs()
         
         print(f"Average diff time:{obd2_data_frame['time_diff_seconds'].mean()}")
+        """
         file_name = generation_path+server_tech
         
         if cfg.enable_database_batch_inserion:
