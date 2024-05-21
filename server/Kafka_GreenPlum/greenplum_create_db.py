@@ -51,6 +51,20 @@ def createTable(cursor,use_database_timestamp):
     cursor.execute(sql_creation_query)
 
 
+def dropTableIfExists(conn,cursor):
+    try:
+        drop_statement = sql.SQL("DROP TABLE IF EXISTS {};").format(sql.Identifier(table_name))
+        
+        # Execute the DROP TABLE statement
+        cursor.execute(drop_statement)
+        
+        # Commit the transaction
+        conn.commit()
+        
+        print(f"Table {table_name} dropped successfully (if it existed).")
+    except Exception as e:
+        print(f"An error occurred while dropping the table: {e}")
+        
 def connectToDatabase():
     conn = psycopg2.connect(dbname=dbname, user=user, password=password, host=host, port=port)
     conn.autocommit = False  
@@ -88,7 +102,7 @@ def closeDatabaseConnection(cursor,conn):
     conn.close()
 
 
-def clearTable(conn,cursor):
+def clearTableIfExists(conn,cursor):
     try:
 
         # SQL command to TRUNCATE table
@@ -113,9 +127,11 @@ def createDatabase(use_database_timestamp):
     # Turn autocommit off for batching
     conn.autocommit = False
    
-    try:     
+    try:
+        
+        dropTableIfExists(conn,cursor)     
         createTable(cursor,use_database_timestamp)
-        clearTable(conn,cursor)
+        clearTableIfExists(conn,cursor)
         closeDatabaseConnection(cursor,conn)
         return True
     except Exception as e:

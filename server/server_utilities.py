@@ -26,8 +26,6 @@ postgresql_inserted_msg_count = 0
 redis_inserted_msg_count = 0
 
 
-
-
 kafka_greenplum_start_reception_storage_time = None
 mqtt_influx_start_reception_storage_time = None
 qpid_cassandra_start_reception_storage_time = None
@@ -40,6 +38,11 @@ qpid_cassandra_end_reception_storage_time = None
 websocket_postgresql_end_reception_storage_time  = None
 websocket_redis_end_reception_storage_time = None
 
+average_communication_latency = 0
+average_storage_latency = 0
+average_transaction_latency = 0
+
+no_of_cars = 0
 
 technologies = ["mqtt_influx", "kafka_greenplum", "qpid_cassandra", "websocket_postgresql", "websocket_redis"]
 
@@ -227,20 +230,11 @@ def calculatereceptionStorageDuration(technology):
      
 #report all information about the server performance behaviour        
 def createProfilingReport(technology):
-    global kafka_received_msg_count
-    global mqtt_received_msg_count
-    global qpid_received_msg_count
-    global ws_received_msg_count
-    
-    global greenplum_inserted_msg_count
-    global influx_inserted_msg_count
-    global cassandra_inserted_msg_count
-    global postgresql_inserted_msg_count
-    global redis_inserted_msg_count
 
     reception_storage_duration = None
-    received_msg_count = None
-    inserted_msg_count = None
+    received_msg_count = 0
+    sent_msg_count = 0
+    inserted_msg_count = 0
     
     if technology not in technologies:
         print("Unkonow Technology")
@@ -249,28 +243,51 @@ def createProfilingReport(technology):
         reception_storage_duration = calculatereceptionStorageDuration(technology)
         if technology == "kafka_greenplum":
             received_msg_count = kafka_received_msg_count
+            sent_msg_count = kafka_sent_msg_count
             inserted_msg_count = greenplum_inserted_msg_count
         elif technology == "mqtt_influx":
             received_msg_count = mqtt_received_msg_count
+            sent_msg_count = mqtt_sent_msg_count
             inserted_msg_count = influx_inserted_msg_count
         elif technology == "qpid_cassandra":
             received_msg_count = qpid_received_msg_count
+            sent_msg_count = qpid_sent_msg_count
             inserted_msg_count = cassandra_inserted_msg_count
         elif technology == "websocket_postgresql":
             received_msg_count = ws_received_msg_count
+            sent_msg_count = ws_sent_msg_count
             inserted_msg_count = postgresql_inserted_msg_count
         elif technology == "websocket_redis":
             received_msg_count = ws_received_msg_count
+            sent_msg_count = ws_sent_msg_count
             inserted_msg_count = redis_inserted_msg_count
-            
     
+    print("Communication Performance Report:")        
+    print(f"No of sent messages: {sent_msg_count}")
     print(f"No of Received messages: {received_msg_count}")
+    print(f"communication Delivery percentage: {(received_msg_count/sent_msg_count)*100}%")
+    print(f"Average communication latency:{average_communication_latency} seconds")
+    print("-------------------------------------------------------------------------------")
+    print("Storage Performance Report:")  
     print(f"No of Inserted records: {inserted_msg_count}")
+    print(f"Storage suucess percentage: {(inserted_msg_count/received_msg_count)*100}%")
+    print(f"Average storage latency: {average_storage_latency} seconds")
     print(f"Reception and storage duration: {reception_storage_duration} seconds")
+    print("-------------------------------------------------------------------------------")
+    print("Transaction Performance Report:")
+    print(f"No of transactions:{received_msg_count}")
+    print(f"No of cars:{no_of_cars}")
+    print(f"Average transaction latency:{average_transaction_latency}")
+
+def createExcelFile(obd2_data_frame,server_tech):
+
+    global average_communication_latency
+    global average_storage_latency
+    global average_transaction_latency
+    global no_of_cars
     
-
-def createExcelFile(obd2_data_frame,generation_path,server_tech):
-
+    generation_path = "./reports/"
+    
     try:
         if(obd2_data_frame is None):
             print("Error:OBD2 Dataframe is None.")
@@ -298,34 +315,41 @@ def createExcelFile(obd2_data_frame,generation_path,server_tech):
         
         comm_latency_sec = obd2_data_frame['rx_time'] - obd2_data_frame['tx_time']
         obd2_data_frame['comm_latency_sec'] = comm_latency_sec.dt.total_seconds().abs()
-        print(f"Average communication latency:{obd2_data_frame['comm_latency_sec'].mean()}")
-        
-        
+        average_communication_latency = obd2_data_frame['comm_latency_sec'].mean()
+         
         write_latency_sec = obd2_data_frame['storage_time'] - obd2_data_frame['rx_time']
         obd2_data_frame['write_latency_sec'] = write_latency_sec.dt.total_seconds().abs()
-        print(f"Average write latency:{obd2_data_frame['write_latency_sec'].mean()}")
-        
+        average_storage_latency = obd2_data_frame['write_latency_sec'].mean()
+
         obd2_data_frame['transaction_latency_sec'] = obd2_data_frame['comm_latency_sec'] + obd2_data_frame['write_latency_sec']
-        print(f"Average transaction latency:{obd2_data_frame['transaction_latency_sec'].mean()}")
+        average_transaction_latency = obd2_data_frame['transaction_latency_sec'].mean()
+
+        no_of_cars = obd2_data_frame['VehicleId'].nunique()
         
+
+        file_path = generation_path
         
-        
-        """ 
-        time_diff = obd2_data_frame['storage_time'] - obd2_data_frame['tx_time']
-        
-        # Convert time difference to seconds (assuming all values are valid)
-        obd2_data_frame['time_diff_seconds'] = time_diff.dt.total_seconds().abs()
-        
-        print(f"Average diff time:{obd2_data_frame['time_diff_seconds'].mean()}")
-        """
-        file_name = generation_path+server_tech
+        file_path += str(no_of_cars)
+        file_name = str(no_of_cars)
         
         if cfg.enable_database_batch_inserion:
-            file_name += "_batched"
+            file_path += "/batch"
+            file_name += "_batch"
+        else:
+            file_path += "/single"
+            file_name += "_single"
         
-        file_name += "_obd2_data_report.xlsx"
+        file_name += ("_"+server_tech)
+        
+        file_name += "_obd2_data.xlsx"
+        
+        full_file_path = os.path.join(file_path, file_name)
+        
+        print("Full file path:", full_file_path)
+
+        os.makedirs(os.path.dirname(full_file_path), exist_ok=True)
         # Generate Excel report
-        obd2_data_frame.to_excel(file_name, index=False)
+        obd2_data_frame.to_excel(full_file_path, index=False)
         print("Excel file has been created.")
     
     except Exception as e:

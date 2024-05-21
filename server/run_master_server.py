@@ -62,14 +62,14 @@ def runProcesses(comm_process, database_process):
 
 
 
-def createReport(database_extract_func,generation_path,server_tech):
+def createReport(database_extract_func,server_tech):
     
     print("Extracting information from the database...")
     extracted_df = database_extract_func(cfg.use_database_timestamp)
     
     if extracted_df is not None:
         print("Creating excel file...")
-        server_utilities.createExcelFile(extracted_df,generation_path,server_tech)
+        server_utilities.createExcelFile(extracted_df,server_tech)
     
 
 
@@ -93,7 +93,6 @@ if __name__ == '__main__':
     database_process = None
     database_extract_func = None
     reporting_module = None
-    generation_path = "fleetManager/server/Kafka_GreenPlum/"
     
     srever_techs = ["mqtt_influx", "kafka_greenplum", "qpid_cassandra", "websocket_postgresql", "websocket_redis"]
     
@@ -113,7 +112,7 @@ if __name__ == '__main__':
             database_process = kafka_gp.storeInDatabaseProcess
             
         database_extract_func = kafka_gp.extractFromDatabase
-        generation_path = "./Kafka_GreenPlum/"
+
         
     elif server_tech == "mqtt_influx":
         comm_process = mqtt_influx.mqttProcess
@@ -124,7 +123,6 @@ if __name__ == '__main__':
             database_process = mqtt_influx.influxProcess
             
         database_extract_func = mqtt_influx.extractFromDatabase
-        generation_path = "./mqtt_Influx/"
         
     elif server_tech == "qpid_cassandra":
         comm_process = qpid_cassandra.receiverProcess
@@ -135,7 +133,6 @@ if __name__ == '__main__':
             database_process = qpid_cassandra.databaseProcess
             
         database_extract_func = qpid_cassandra.extractFromDatabase
-        generation_path = "./qpid_cassandra/"
         
         
     elif server_tech == "websocket_postgresql":
@@ -147,7 +144,6 @@ if __name__ == '__main__':
             database_process = websocket_postgresql.storeInDatabaseProcess
             
         database_extract_func = websocket_postgresql.extractFromDatabase
-        generation_path = "./webSockets_Postgresql/"
         
         
     elif server_tech == "websocket_redis":
@@ -157,21 +153,21 @@ if __name__ == '__main__':
         else:
             database_process = websocket_redis.dbWriterProcess
         database_extract_func = websocket_redis.extractFromDatabase
-        generation_path = "./webSockets_Redis/"
+
         
  
     try:
         
         result,no_of_received_msgs,no_of_sent_msgs,no_of_inserted_records = runProcesses(comm_process, database_process)
-        
+
         if result:
             print("Processes have finished successfully.")
             server_utilities.recordEndreceptionStorageTime(server_tech)
             server_utilities.setReceivedMsgCount(server_tech,no_of_received_msgs)
             server_utilities.setSentMsgCount(server_tech,no_of_sent_msgs)
             server_utilities.setInsertedMsgCount(server_tech,no_of_inserted_records)
+            createReport(database_extract_func,server_tech)
             server_utilities.createProfilingReport(server_tech)
-            createReport(database_extract_func,generation_path,server_tech)
 
         else:
             print("Processes have terminated for some errors.")

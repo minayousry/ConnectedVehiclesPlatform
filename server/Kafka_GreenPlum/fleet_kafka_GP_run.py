@@ -10,7 +10,7 @@ from datetime import datetime
 
 
 # Configuration for connecting to your Kafka server
-kafka_server = '127.0.0.1:9092'  # this to the Kafka server address
+kafka_server = '127.0.0.1:9092'
 topic_name = 'OBD2_data'
 consumer_timeout_in_ms = 20000
 received_msgs = []
@@ -20,12 +20,11 @@ time_diff_list = []
 user = 'mina_yousry_iti'
 password = 'my_psw'
 host = 'localhost'
-port = '5432'  # Default port for Greenplum and PostgreSQL
+port = '5432' 
 default_dbname = "postgres"
 dbname = "OBD2_Data_Fleet_database"
 table_name = "OBD2_table"
 db_batch_size = 100
-
 
 
 def getcurrentTimestamp():
@@ -39,13 +38,13 @@ def getInsertionSqlQuery(use_database_timestamp):
         insertion_sql_query =f"""INSERT INTO {table_name} (
                             vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
                             lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
-                            co2_consumption, deceleration,rx_time) 
+                            co2_consumption, deceleration, rx_time) 
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"""
     else:
         insertion_sql_query =f"""INSERT INTO {table_name} (
                             vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
                             lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
-                            co2_consumption, deceleration,rx_time,storage_time) 
+                            co2_consumption, deceleration, rx_time, storage_time) 
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"""
     
     
@@ -58,7 +57,6 @@ def kafkaConsumerProcess(queue,no_of_received_msgs_obj,no_of_sent_msgs_obj):
     sent_msg_count = 0
     received_msg_count = 0
     
-    sent_msg_count = 0
     exit_code = 0
     consumer = None
     
@@ -76,7 +74,7 @@ def kafkaConsumerProcess(queue,no_of_received_msgs_obj,no_of_sent_msgs_obj):
             received_msg = message.value
             if received_msg[0] == "STOP":
                 print("Received STOP message")
-                sent_msgs_count = received_msg[1]
+                sent_msg_count = received_msg[1]
                 queue.put("STOP")
                 break
             received_msg.append(getcurrentTimestamp())
@@ -157,7 +155,7 @@ def extractFromDatabase(use_database_timestamp):
     query = f"""
             SELECT vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
             lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
-            co2_consumption, deceleration, storage_time FROM {table_name};
+            co2_consumption, deceleration, rx_time, storage_time FROM {table_name};
             """
 
     # Execute the query and fetch all data
@@ -165,7 +163,7 @@ def extractFromDatabase(use_database_timestamp):
 
     df.columns = ['VehicleId', 'tx_time', 'x_pos', 'y_pos', 'gps_lon', 'gps_lat',
                   'Speed', 'RoadID', 'LaneId', 'Displacement', 'TurnAngle', 'Acceleration',
-                  'FuelConsumption', 'Co2Consumption', 'Deceleration', 'storage_time']
+                  'FuelConsumption', 'Co2Consumption', 'Deceleration','rx_time', 'storage_time']
 
     closeDatabaseConnection(conn,cursor)
     
