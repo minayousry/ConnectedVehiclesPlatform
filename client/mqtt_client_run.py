@@ -2,7 +2,7 @@ import traci
 import time
 import pytz
 import datetime
-import json
+import ujson as json
 import traci.constants as tc
 import paho.mqtt.client as mqtt
 
@@ -17,6 +17,8 @@ def on_connect(client, userdata, flags, rc):
     print("Connected to MQTT broker with result code " + str(rc))
 
 def runScenario(sumo_cmd,client):
+    
+    sent_msg_count = 0
     traci.start(sumo_cmd)
     try:
         while traci.simulation.getMinExpectedNumber() > 0:
@@ -37,28 +39,28 @@ def runScenario(sumo_cmd,client):
                 co2_cons = round(traci.vehicle.getCO2Emission(vehid), 2)
                 dece = round(traci.vehicle.getDecel(vehid), 2)
 
-                veh_data = [
-                    vehid,          # Vehicle ID as string
-                    str(cl_utl.getdatetime()),       # Datetime string
-                    float(x_pos),        # X position as float
-                    float(y_pos),        # Y position as float
-                    float(gps_lon),      # GPS longitude as float
-                    float(gps_lat),      # GPS latitude as float
-                    float(spd),          # Speed as float
-                    edge,                # Road ID as string
-                    lane,                # Lane ID as string
-                    float(displacement), # Displacement as float
-                    float(turnAngle),    # Turn angle as float
-                    float(acc),          # Acceleration as float
-                    float(fuel_cons),    # Fuel consumption as float
-                    float(co2_cons),     # CO2 consumption as float
-                    float(dece)          # Deceleration as float
-                ]
+                veh_data = {
+                    0:vehid,          # Vehicle ID as string
+                    1:cl_utl.getdatetime(),       # Datetime string
+                    2:x_pos,        # X position as float
+                    3:y_pos,        # Y position as float
+                    4:gps_lon,      # GPS longitude as float
+                    5:gps_lat,      # GPS latitude as float
+                    6:spd,          # Speed as float
+                    7:edge,                # Road ID as string
+                    8:lane,                # Lane ID as string
+                    9:displacement, # Displacement as float
+                    10:turnAngle,    # Turn angle as float
+                    11:acc,          # Acceleration as float
+                    12:fuel_cons,    # Fuel consumption as float
+                    13:co2_cons,     # CO2 consumption as float
+                    14:dece          # Deceleration as float
+                }
 
                 client.publish(mqtt_topic, json.dumps(veh_data))
+                sent_msg_count += 1
                 cl_utl.increaseMsgCount("mqtt")
-        
-        client.publish(mqtt_topic, json.dumps(["STOP"]))
+        client.publish(mqtt_topic, json.dumps({0:"STOP",1:sent_msg_count}))
     finally:
         traci.close()
 

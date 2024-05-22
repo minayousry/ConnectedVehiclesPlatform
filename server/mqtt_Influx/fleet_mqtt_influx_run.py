@@ -6,6 +6,7 @@ from datetime import datetime
 import pandas as pd
 import sys
 import os
+import ujson as json
 
 database_name = "obd2_database"
 db_batch_size = 100
@@ -45,17 +46,22 @@ def on_message(client, userdata, msg,queue):
     # Get the current time in seconds
     start_time = time.time()
     
-    data_list = msg.payload.decode().split(',')
+    #data_list = msg.payload.decode().split(',')
+    data_dict = json.loads(msg.payload.decode('utf-8'))
+    data_list = list(data_dict.values())
 
-
-    if data_list[0] != '["STOP"]':
+    if data_list[0] != "STOP":
+        current_timestamp = getcurrentTimestamp()
+        data_list.append(current_timestamp)
         queue.put(data_list)  # Put the data into the queue
+        
         received_msg_count += 1  
     else:
-        sent_msg_count = 0   
+        print("Finished receiving messages")
+        print("Queue size is ",queue.qsize())
+        sent_msg_count = data_list[1]
+        queue.put("STOP")    
         is_msg_received = True
-    
-    
     
     
     
@@ -67,7 +73,7 @@ def on_disconnect(client, userdata, rc):
     print(f"Disconnected with result code {rc}")
 
 # MQTT process
-def mqttProcess(queue,no_of_received_msgs_obj):
+def mqttProcess(queue,no_of_received_msgs_obj,no_of_sent_msgs_obj):
     
     global start_time
     global is_msg_received
@@ -83,12 +89,20 @@ def mqttProcess(queue,no_of_received_msgs_obj):
     mqtt_client.loop_start()
     
 
-    while True:        
+    while True:
+            
+        current_time = time.time()
+        time_diff = current_time - start_time
+        #print(time_diff)
+        
+        
         
         if (is_msg_received and (queue.empty())):
             global received_msg_count
             with no_of_received_msgs_obj.get_lock():
                 no_of_received_msgs_obj.value = received_msg_count
+            with no_of_sent_msgs_obj.get_lock():
+                no_of_sent_msgs_obj.value = sent_msg_count
             mqtt_client.loop_stop()
             print("MQTT communication timeout")
             queue.put("STOP")
@@ -111,7 +125,9 @@ def influxBatchProcess(queue,no_of_inserted_msgs_obj,use_database_timestamp):
     
     measurement_body = []
     while True:
+
         data_list = queue.get()  # Get the data from the queue
+
         if data_list is not None and data_list != "STOP":   
             measurement = getMeasurement(inserted_msg_count,data_list,use_database_timestamp)
             measurement_body.append(measurement)
@@ -143,21 +159,22 @@ def getMeasurement(msg_id,data_list,use_database_timestamp):
         measurement = {
             "measurement": str(msg_id),
             "fields": {
-            "vehicle_id": data_list[0].replace('[',''),
+            "vehicle_id": data_list[0],
             "tx_time": data_list[1],
-            "x_pos": float(data_list[2]),
-            "y_pos": float(data_list[3]),
-            "gps_lon": float(data_list[4]),
-            "gps_lat": float(data_list[5]),
-            "speed": float(data_list[6]),
+            "x_pos": data_list[2],
+            "y_pos": data_list[3],
+            "gps_lon": data_list[4],
+            "gps_lat": data_list[5],
+            "speed": data_list[6],
             "road_id": data_list[7],
             "lane_id": data_list[8],
-            "displacement": float(data_list[9]),
-            "turn_angle": float(data_list[10]),
-            "acceleration": float(data_list[11]),
-            "fuel_consumption": float(data_list[12]),
-            "co2_consumption": float(data_list[13]),
-            "deceleration": float(data_list[14].replace(']',''))
+            "displacement": data_list[9],
+            "turn_angle": data_list[10],
+            "acceleration": data_list[11],
+            "fuel_consumption": data_list[12],
+            "co2_consumption": data_list[13],
+            "deceleration": data_list[14],
+            "rx_time": data_list[15]
             }
         }
     else:
@@ -165,45 +182,32 @@ def getMeasurement(msg_id,data_list,use_database_timestamp):
         measurement = {
             "measurement": str(msg_id),
             "fields": {
-            "vehicle_id": data_list[0].replace('[',''),
+            "vehicle_id": data_list[0],
             "tx_time": data_list[1],
-            "x_pos": float(data_list[2]),
-            "y_pos": float(data_list[3]),
-            "gps_lon": float(data_list[4]),
-            "gps_lat": float(data_list[5]),
-            "speed": float(data_list[6]),
+            "x_pos": data_list[2],
+            "y_pos": data_list[3],
+            "gps_lon": data_list[4],
+            "gps_lat": data_list[5],
+            "speed": data_list[6],
             "road_id": data_list[7],
             "lane_id": data_list[8],
-            "displacement": float(data_list[9]),
-            "turn_angle": float(data_list[10]),
-            "acceleration": float(data_list[11]),
-            "fuel_consumption": float(data_list[12]),
-            "co2_consumption": float(data_list[13]),
-            "deceleration": float(data_list[14].replace(']','')),
+            "displacement": data_list[9],
+            "turn_angle": data_list[10],
+            "acceleration": data_list[11],
+            "fuel_consumption": data_list[12],
+            "co2_consumption": data_list[13],
+            "deceleration": data_list[14],
+            "rx_time": data_list[15],
             "storage_time": current_timestamp
             }
         }
     
     return measurement    
 
-def get_line_protocol(msg_id, data_list):
-    fields = ",".join([f"{key}={value}" for key, value in zip(
-        ["vehicle_id", "tx_time", "x_pos", "y_pos", "gps_lon", "gps_lat", 
-         "speed", "road_id", "lane_id", "displacement", "turn_angle", 
-         "acceleration", "fuel_consumption", "co2_consumption", "deceleration"],
-        [data_list[0].replace('[',''), data_list[1], float(data_list[2]),
-         float(data_list[3]), float(data_list[4]), float(data_list[5]), 
-         float(data_list[6]), data_list[7], data_list[8], float(data_list[9]), 
-         float(data_list[10]), float(data_list[11]), float(data_list[12]), 
-         float(data_list[13]), float(data_list[14].replace(']',''))])
-    ])
-    return f"{msg_id} {fields}"
-    
 def influxProcess(queue,no_of_inserted_msgs_obj,use_database_timestamp):
     
     global inserted_msg_count
-    
-    
+
     # Set up InfluxDB client
     influx_client = InfluxDBClient(
                     host='localhost',          # InfluxDB server host
@@ -217,6 +221,7 @@ def influxProcess(queue,no_of_inserted_msgs_obj,use_database_timestamp):
     
     measurement_body = []
     while True:
+        
         data_list = queue.get()  # Get the data from the queue
         if data_list is not None and data_list != "STOP":
             measurement = getMeasurement(inserted_msg_count,data_list,use_database_timestamp)
@@ -244,26 +249,26 @@ def extractFromDatabase(use_database_timestamp):
     influx_client.switch_database(database_name)
     
     all_data_frames = [] 
-     
+    
+   
     # Fetch all measurements
     measurements = influx_client.query('SHOW MEASUREMENTS').get_points()
     measurement_names = [measurement['name'] for measurement in measurements]
-    
+
+       
     dict_list = []
     
     for name in measurement_names:
         result = influx_client.query(f"SELECT * FROM \"{str(name)}\"")
         points = list(result.get_points())
         
-        
         for i in range(len(points)):
             dict_list.append(points[i])
-        
+    
+   
     df = pd.DataFrame(dict_list)
     
-    
-    df['tx_time'] = df['tx_time'].str.replace('\"','').str.strip()
-    
+
     if use_database_timestamp:
         print("using database timestamp")
         # Convert 'time' column to datetime format with timezone specifier 'Z'

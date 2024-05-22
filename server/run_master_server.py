@@ -14,7 +14,7 @@ import server_utilities as server_utilities
 import configurations as cfg
 
 
-def runProcesses(comm_process, database_process):
+def runProcesses(server_tech,comm_process, database_process):
     
     result = False
 
@@ -23,6 +23,8 @@ def runProcesses(comm_process, database_process):
     no_of_inserted_msgs_obj = multiprocessing.Value('i', 0)
     
     total_size_bytes = 9900000
+    if server_tech == "mqtt_influx":
+        total_size_bytes = 0
     
     try:
         # Create a multiprocessing Queue for IPC
@@ -158,7 +160,7 @@ if __name__ == '__main__':
  
     try:
         
-        result,no_of_received_msgs,no_of_sent_msgs,no_of_inserted_records = runProcesses(comm_process, database_process)
+        result,no_of_received_msgs,no_of_sent_msgs,no_of_inserted_records = runProcesses(server_tech,comm_process, database_process)
 
         if result:
             print("Processes have finished successfully.")

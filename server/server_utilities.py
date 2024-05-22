@@ -265,12 +265,18 @@ def createProfilingReport(technology):
     print("Communication Performance Report:")        
     print(f"No of sent messages: {sent_msg_count}")
     print(f"No of Received messages: {received_msg_count}")
-    print(f"communication Delivery percentage: {(received_msg_count/sent_msg_count)*100}%")
+    if sent_msg_count == 0:
+        print("Error:Communication Delivery percentage: 0%")
+    else:
+        print(f"communication Delivery percentage: {(received_msg_count/sent_msg_count)*100}%")
     print(f"Average communication latency:{average_communication_latency} seconds")
     print("-------------------------------------------------------------------------------")
     print("Storage Performance Report:")  
     print(f"No of Inserted records: {inserted_msg_count}")
-    print(f"Storage suucess percentage: {(inserted_msg_count/received_msg_count)*100}%")
+    if received_msg_count == 0:
+        print("Error:Storage suucess percentage: 0%")
+    else:
+        print(f"Storage suucess percentage: {(inserted_msg_count/received_msg_count)*100}%")
     print(f"Average storage latency: {average_storage_latency} seconds")
     print(f"Reception and storage duration: {reception_storage_duration} seconds")
     print("-------------------------------------------------------------------------------")
@@ -304,10 +310,16 @@ def createExcelFile(obd2_data_frame,server_tech):
         if type(obd2_data_frame['tx_time'].iloc[0]) == str:
             print("Converting tx time to datetime")
             obd2_data_frame['tx_time'] = pd.to_datetime(obd2_data_frame['tx_time'], format='%Y-%m-%d %H:%M:%S.%f')
+        
+        if type(obd2_data_frame['rx_time'].iloc[0]) == str:
+            print("Converting tx time to datetime")
+            obd2_data_frame['rx_time'] = pd.to_datetime(obd2_data_frame['rx_time'], format='%Y-%m-%d %H:%M:%S.%f')
 
         if type(obd2_data_frame['storage_time'].iloc[0]) == str:
             print("Converting storage time to datetime")
             obd2_data_frame['storage_time'] = pd.to_datetime(obd2_data_frame['storage_time'], format='%Y-%m-%d %H:%M:%S.%f')
+            
+        
 
         
         print("Calculating time difference")
@@ -324,8 +336,7 @@ def createExcelFile(obd2_data_frame,server_tech):
         obd2_data_frame['transaction_latency_sec'] = obd2_data_frame['comm_latency_sec'] + obd2_data_frame['write_latency_sec']
         average_transaction_latency = obd2_data_frame['transaction_latency_sec'].mean()
 
-        no_of_cars = obd2_data_frame['VehicleId'].nunique()
-        
+        no_of_cars = obd2_data_frame['vehicle_id'].nunique()
 
         file_path = generation_path
         
