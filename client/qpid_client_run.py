@@ -1,119 +1,111 @@
-import traci
-import time
-import pytz
-import datetime
-import json
-import asyncio
-from proton import Message
-from proton.handlers import MessagingHandler
-from proton.reactor import Container
-import threading
-import queue
-import time
+import argparse
+
 import client_utilities as cl_utl
 
-address = 'obd2_data_queue' 
-amqp_port_no = "8888"
+import kafka_client_run as kafka_cl
+import mqtt_client_run as mqtt_cl
+import qpid_client_run as qpid_cl
+import ws_client_run as ws_cl
 
-class Sender(MessagingHandler):
-    def __init__(self, server_url, address,data_queue,stop_event):
-        super(Sender, self).__init__()
-        self.server_url = server_url
-        self.address = address
-        self.data_queue = data_queue
-        self.sender = None
-        self.stop_event = stop_event
-        self.conn = None
+import client_utilities as cl_utl
 
-    def on_start(self, event):
-        print("on Start")
-        self.conn = event.container.connect(self.server_url)
-        self.sender = event.container.create_sender(self.conn, self.address)
-        threading.Thread(target=self.send_data, daemon=True).start()
+remote_machine_ip_addr = "34.90.52.138"
+simulation_path = "./simulation1/"
+main_simulation_file = simulation_path+"osm.sumocfg"
+cars_simulation_file = simulation_path+"osm.passenger.trips.xml"
+
+# Confiurations for SUMO
+sumo_cmd = ["sumo", "-c", main_simulation_file]
+
+no_of_cars = 100
+
+sim_duration = 1014 #seconds
+delay_per_simulated_second = 20 #ms
+
+def configureNoOfCars():
+    
+    result = False
+    
+    # Set the number of cars to be generated in the simulation
+
+    comment_text = "<!--"
+    
+    trip_id_veh_text = "<trip id=\"veh"    
+    commented_trip_id_text = comment_text + trip_id_veh_text
+    
+ 
+    # Read the contents of the file
+    with open(cars_simulation_file, 'r+') as file:
+        lines = file.readlines()
         
-    def send_data(self):
-        while not self.stop_event.is_set() or not self.data_queue.empty():
-            try:
-                data = self.data_queue.get(True,timeout=1)  # Timeout to periodically check stop_event
-                message = Message(body=data)
-                self.sender.send(message)
-                cl_utl.increaseMsgCount("qpid")
-            except queue.Empty:
-                continue  # Continue checking if the stop_event is set
-            except Exception as e:
-                print(f"Error sending data: {e}")
-        if self.conn:
-            self.conn.close()
-
-def start_sender(server_url,data_queue, stop_event):
-    sender = Sender(server_url, address, data_queue,stop_event)
-    Container(sender).run()
-
-def run_scenario(sumo_cmd,data_queue,stop_event):
-
-    traci.start(sumo_cmd)
-    while traci.simulation.getMinExpectedNumber() > 0:
-        traci.simulationStep()
-        vehicles = traci.vehicle.getIDList()
-
-        for i in range(0,len(vehicles)):
-            #Function descriptions
-            #https://sumo.dlr.de/docs/TraCI/Vehicle_Value_Retrieval.html
-            #https://sumo.dlr.de/pydoc/traci._vehicle.html
-            vehid = vehicles[i]
-            x_pos, y_pos = traci.vehicle.getPosition(vehicles[i])
-            gps_lon, gps_lat = traci.simulation.convertGeo(x_pos, y_pos)
-            spd = round(traci.vehicle.getSpeed(vehicles[i])*3.6,2) #Convert m/s to km/h
-            edge = traci.vehicle.getRoadID(vehicles[i])
-            lane = traci.vehicle.getLaneID(vehicles[i])
-            displacement = round(traci.vehicle.getDistance(vehicles[i]),2) #distance to starting point
-            turnAngle = round(traci.vehicle.getAngle(vehicles[i]),2) #degree within last step
-            acc = round(traci.vehicle.getAcceleration(vehicles[i]),2)
-            fuel_cons = round(traci.vehicle.getFuelConsumption(vehicles[i]),2)
-            co2_cons = round(traci.vehicle.getCO2Emission(vehicles[i]),2)
-            dece = round(traci.vehicle.getDecel(vehicles[i]),2)
-
-            #Packing the vehicle data
-            veh_data = [vehid,cl_utl.getdatetime(),x_pos,y_pos,
-                        gps_lon,gps_lat,spd,edge,lane, 
-                        displacement,turnAngle,acc,
-                        fuel_cons,co2_cons,dece]
-             
-            data_queue.put(veh_data)
+        for i in range(len(lines)):
+            if commented_trip_id_text in lines[i]:
+                lines[i] = lines[i].replace(comment_text,"")
+                break
         
-        # Sleep for 0.2 seconds
-        #time.sleep(0.2)    
+        search_text = trip_id_veh_text+str(no_of_cars)
+         
+        for i in range(len(lines)):
+            if search_text in lines[i]:
+                result = True
+                lines[i] = lines[i].replace(trip_id_veh_text,commented_trip_id_text)
+                break    
+        
+        if result:
+            # Move the file pointer to the beginning of the file
+            file.seek(0)
+            file.writelines(lines)
+            file.truncate()
+        else:
+            print("No such veh id found in the simulation file.")
 
-    traci.close()
-    stop_event.set()  # Signal the sender thread to stop
+    return result
 
-def runQpidClient(sumo_cmd,remote_machine_ip_addr):
+if __name__ == '__main__':
     
-    server_url = "amqp://"+remote_machine_ip_addr+":"+amqp_port_no
-
-    data_queue = queue.Queue()
-    stop_event = threading.Event()
-
-    # Start sender thread
-    sender_thread = threading.Thread(target=start_sender, args=(server_url,data_queue,stop_event))
-    sender_thread.start()
+    tech_list = ["kafka", "mqtt", "qpid", "ws"]
     
-    cl_utl.recordStartSimTime("qpid")
-    # Run the simulation scenario, which feeds data into the queue
-    run_scenario(sumo_cmd,data_queue,stop_event)
-    cl_utl.recordEndSimTime("qpid")
+    # Create the argument parser
+    parser = argparse.ArgumentParser()
+
+    # Add a string argument
+    parser.add_argument('client_technology', type=str, help='select which technology to use for the client.')
+
+    # Parse the arguments
+    args = parser.parse_args()
+
+    # Access the parsed argument
+    client_tech = args.client_technology
     
-    sender_thread.join(timeout=10)  # Wait for up to 10 seconds for the thread to finish
-
-    if sender_thread.is_alive():
-        print("Warning: Sender thread is still alive after timeout.")
+    if client_tech in tech_list:
+        result = configureNoOfCars()
+    else:
+        print("Invalid client technology. Please select one of the following: kafka, mqtt, qpid,  or ws")
+        exit(1)
     
+    if result:
+        cl_utl.resetMsgCount(client_tech) 
+        if client_tech == "kafka":    
+            kafka_cl.runKafkaClient(sumo_cmd,remote_machine_ip_addr)
+        elif client_tech == "mqtt":
+            mqtt_cl.runMqttClient(sumo_cmd,remote_machine_ip_addr)
+        elif client_tech == "qpid":
+            qpid_cl.runQpidClient(sumo_cmd,remote_machine_ip_addr)
+        
+        elif client_tech == "ws":
+            ws_cl.runWsClient(sumo_cmd,remote_machine_ip_addr)
+        
+        sim_duration = cl_utl.calculateSimDuration(client_tech)
+        
+        if sim_duration is not None:
+            print(f"Simulation duration: {sim_duration}")
+        else:
+            print("Error in calculating the simulation duration.")
+        
+        no_of_sent_msgs = cl_utl.getMsgCount(client_tech)
+        print(f"Number of sent messages: {no_of_sent_msgs}")
+         
+    else:
+        print("Error in configuring the number of cars in the simulation file.")
+        exit(1)
     
-    
-
-
-
-
-
-
-

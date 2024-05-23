@@ -38,6 +38,7 @@ def createKeyspaceAndTable(cluster):
         fuel_consumption double,
         co2_consumption double,
         deceleration double,
+        rx_time timestamp,
         storage_time timestamp
     );
     """
