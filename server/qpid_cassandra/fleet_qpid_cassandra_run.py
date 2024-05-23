@@ -8,9 +8,11 @@ import time
 from uuid import uuid4
 from datetime import datetime
 import pandas as pd
-
+from cassandra.policies import DCAwareRoundRobinPolicy
 import sys
 import os
+import logging
+from cassandra.query import SimpleStatement
 
 received_msg_count = 0
 inserted_msg_count = 0
@@ -88,12 +90,23 @@ class Receiver(MessagingHandler):
 
 def receiverProcess(data_queue, no_of_received_msgs_obj, no_of_sent_msgs_obj):
 
-    server_url = "amqp://0.0.0.0:5672/obd2_data_queue"
+    server_url = "amqp://0.0.0.0:8888/obd2_data_queue"
     handler = Receiver(server_url, data_queue, no_of_received_msgs_obj, no_of_sent_msgs_obj)
     container = Container(handler)
     container.run()
 
+
+def getCluster():
+    cluster = Cluster(
+            contact_points=['localhost'],
+            load_balancing_policy=DCAwareRoundRobinPolicy(local_dc='datacenter1'),
+            protocol_version=5
+        )
+    return cluster
     
+
+    
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     
 def databaseProcess(queue,no_of_inserted_msgs,use_database_timestamp):
     
@@ -104,10 +117,10 @@ def databaseProcess(queue,no_of_inserted_msgs,use_database_timestamp):
                                                                 gps_lon, gps_lat, speed,road_id,lane_id, \
                                                                 displacement, turn_angle, acceleration, fuel_consumption,co2_consumption, \
                                                                 deceleration, rx_time, storage_time \
-                                                                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,,%s)"
+                                                                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
     
     try:
-        cluster = Cluster(['localhost'])
+        cluster = cluster = getCluster()
         session = cluster.connect(keyspace_name)
 
         while True:
@@ -136,7 +149,12 @@ def databaseProcess(queue,no_of_inserted_msgs,use_database_timestamp):
     finally:
         with no_of_inserted_msgs.get_lock():
                 no_of_inserted_msgs.value = inserted_msg_count
-        cluster.shutdown()
+        if 'session' in locals():
+            print("closing session")
+            session.shutdown()
+        if 'cluster' in locals():
+            print("closing cluster")
+            cluster.shutdown()
         
 
 def insertBatch(session, batch,insert_query):
@@ -161,7 +179,7 @@ def databaseBatchProcess(queue,no_of_inserted_msgs,use_database_timestamp):
                                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
     
     try:
-        cluster = Cluster(['localhost'])
+        cluster = getCluster()
         session = cluster.connect(keyspace_name)
 
         batch_count = 0
@@ -195,41 +213,54 @@ def databaseBatchProcess(queue,no_of_inserted_msgs,use_database_timestamp):
     finally:
         with no_of_inserted_msgs.get_lock():
                 no_of_inserted_msgs.value = inserted_msg_count
-        cluster.shutdown()
+        if 'session' in locals():
+            print("closing session")
+            session.shutdown()
+        if 'cluster' in locals():
+            print("closing cluster")
+            cluster.shutdown()
 
-  
-def extractFromDatabase(use_database_timestamp):
-    
+
+def extractFromDatabase(x):
     result = None
     cluster = None
     session = None
     
     try:
-        cluster = Cluster(['localhost'])
+        cluster = getCluster()
         session = cluster.connect(keyspace_name)
         
-
         select_query = f"""SELECT vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
                             lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
                             co2_consumption, deceleration, rx_time, storage_time 
                             FROM {keyspace_name}.{table_name}"""
-                        
 
-        # Execute query and fetch data
-        rows = session.execute(select_query)
+        statement = SimpleStatement(select_query, fetch_size=1000)
+        rows = session.execute(statement)
+        all_rows = []
 
-        result = pd.DataFrame(rows.current_rows)
+        for row in rows:
+            all_rows.append(row)
+
+        while rows.has_more_pages:
+            rows = session.execute(statement, paging_state=rows.paging_state)
+            for row in rows:
+                all_rows.append(row)
+
+        result = pd.DataFrame(all_rows)
         
+        logging.info("Succeeded to extract info from database.")
+        logging.info(f"Number of records extracted: {len(result)}")
 
-        print("succeded to extract info from database.")
-    
     except Exception as e:
-        print(f"Failed to extract information from the database: {e}")
+        logging.error(f"Failed to extract information from the database: {e}")
     
     finally:
-        session.shutdown()
-        cluster.shutdown()
-    
+        if session:
+            session.shutdown()
+        if cluster:
+            cluster.shutdown()
+
     return result
 
 

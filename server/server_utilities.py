@@ -236,6 +236,7 @@ def createProfilingReport(technology):
     sent_msg_count = 0
     inserted_msg_count = 0
     
+    
     if technology not in technologies:
         print("Unkonow Technology")
         exit(1)
@@ -272,11 +273,11 @@ def createProfilingReport(technology):
     print(f"Average communication latency:{average_communication_latency} seconds")
     print("-------------------------------------------------------------------------------")
     print("Storage Performance Report:")  
-    print(f"No of Inserted records: {inserted_msg_count}")
+    print(f"No of Inserted records: {no_of_inserted_transactions}")
     if received_msg_count == 0:
         print("Error:Storage suucess percentage: 0%")
     else:
-        print(f"Storage suucess percentage: {(inserted_msg_count/received_msg_count)*100}%")
+        print(f"Storage suucess percentage: {(no_of_inserted_transactions/received_msg_count)*100}%")
     print(f"Average storage latency: {average_storage_latency} seconds")
     print(f"Reception and storage duration: {reception_storage_duration} seconds")
     print("-------------------------------------------------------------------------------")
@@ -291,8 +292,11 @@ def createExcelFile(obd2_data_frame,server_tech):
     global average_storage_latency
     global average_transaction_latency
     global no_of_cars
+    global no_of_inserted_transactions
     
     generation_path = "./reports/"
+    
+    no_of_inserted_transactions = len(obd2_data_frame)
     
     try:
         if(obd2_data_frame is None):
