@@ -316,7 +316,7 @@ def createExcelFile(obd2_data_frame,server_tech):
             obd2_data_frame['tx_time'] = pd.to_datetime(obd2_data_frame['tx_time'], format='%Y-%m-%d %H:%M:%S.%f')
         
         if type(obd2_data_frame['rx_time'].iloc[0]) == str:
-            print("Converting tx time to datetime")
+            print("Converting rx time to datetime")
             obd2_data_frame['rx_time'] = pd.to_datetime(obd2_data_frame['rx_time'], format='%Y-%m-%d %H:%M:%S.%f')
 
         if type(obd2_data_frame['storage_time'].iloc[0]) == str:

@@ -50,14 +50,11 @@ def closeDatabaseConnection(cursor,conn):
 def preprocessData(data,use_database_timestamp):
     
     record = ()
-    
-     # Strip double quotes from the timestamp field if present
-    tx_time_str = data[1].strip('"')
 
     if use_database_timestamp:
         record = (
                     data[0],                # vehicle_id
-                    tx_time_str,            # tx_time
+                    data[1],            # tx_time
                     data[2],         # x_pos
                     data[3],         # y_pos
                     data[4],         # gps_lon
@@ -77,7 +74,7 @@ def preprocessData(data,use_database_timestamp):
         current_timestamp = getcurrentTimestamp()
         record = (
                     data[0],                # vehicle_id
-                    tx_time_str,            # tx_time
+                    data[1],            # tx_time
                     data[2],         # x_pos
                     data[3],         # y_pos
                     data[4],         # gps_lon
