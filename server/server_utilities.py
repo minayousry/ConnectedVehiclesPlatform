@@ -42,6 +42,15 @@ average_communication_latency = 0
 average_storage_latency = 0
 average_transaction_latency = 0
 
+max_communication_latency = 0
+max_storage_latency = 0
+max_transaction_latency = 0
+    
+min_communication_latency = 0
+min_storage_latency = 0
+min_transaction_latency = 0
+    
+
 no_of_cars = 0
 
 technologies = ["mqtt_influx", "kafka_greenplum", "qpid_cassandra", "websocket_postgresql", "websocket_redis"]
@@ -270,7 +279,9 @@ def createProfilingReport(technology):
         print("Error:Communication Delivery percentage: 0%")
     else:
         print(f"communication Delivery percentage: {(received_msg_count/sent_msg_count)*100}%")
+    print(f"Min communication latency:{min_communication_latency} seconds")
     print(f"Average communication latency:{average_communication_latency} seconds")
+    print(f"Max communication latency:{max_communication_latency} seconds")
     print("-------------------------------------------------------------------------------")
     print("Storage Performance Report:")  
     print(f"No of Inserted records: {no_of_inserted_transactions}")
@@ -278,25 +289,42 @@ def createProfilingReport(technology):
         print("Error:Storage suucess percentage: 0%")
     else:
         print(f"Storage suucess percentage: {(no_of_inserted_transactions/received_msg_count)*100}%")
+    
+    print(f"Min Storage latency: {min_storage_latency} seconds")  
     print(f"Average storage latency: {average_storage_latency} seconds")
+    print(f"Max Storage latency: {max_storage_latency} seconds")  
     print(f"Reception and storage duration: {reception_storage_duration} seconds")
     print("-------------------------------------------------------------------------------")
     print("Transaction Performance Report:")
     print(f"No of transactions:{received_msg_count}")
     print(f"No of cars:{no_of_cars}")
-    print(f"Average transaction latency:{average_transaction_latency}")
+    print(f"Min transaction latency:{min_transaction_latency} seconds")
+    print(f"Average transaction latency:{average_transaction_latency} seconds")
+    print(f"Max transaction latency:{max_transaction_latency} seconds")
 
-def createExcelFile(obd2_data_frame,server_tech):
+def createExcelFile(obd2_data_frame,server_tech,is_batch_insertion,db_batch_size,last_storage_timestamp):
 
     global average_communication_latency
     global average_storage_latency
     global average_transaction_latency
+    
+    global max_communication_latency
+    global max_storage_latency
+    global max_transaction_latency
+    
+    global min_communication_latency
+    global min_storage_latency
+    global min_transaction_latency
+    
+    
     global no_of_cars
     global no_of_inserted_transactions
     
     generation_path = "./reports/"
     
     no_of_inserted_transactions = len(obd2_data_frame)
+    
+    obd2_data_frame.sort_values(by='tx_time', inplace=True)
     
     try:
         if(obd2_data_frame is None):
@@ -318,13 +346,63 @@ def createExcelFile(obd2_data_frame,server_tech):
         if type(obd2_data_frame['rx_time'].iloc[0]) == str:
             print("Converting rx time to datetime")
             obd2_data_frame['rx_time'] = pd.to_datetime(obd2_data_frame['rx_time'], format='%Y-%m-%d %H:%M:%S.%f')
+        
+        
+        print("last insertion timestamp is:")
+        print(last_storage_timestamp)
 
+        
+        if is_batch_insertion:
+            print("Batch Insertion")
+            if no_of_inserted_transactions < db_batch_size:
+                obd2_data_frame['storage_time'] = last_storage_timestamp
+            else:
+                #shift up by db_batch_size
+                obd2_data_frame['storage_time'] = obd2_data_frame['storage_time'].shift(db_batch_size * -1)
+
+                storage_time_list = list(obd2_data_frame['storage_time'])
+                first_index = storage_time_list.index(None)
+                
+
+                if first_index != -1:
+                    print("First nan index is:")
+                    print(first_index)
+                    remaining_records_of_last_batch = no_of_inserted_transactions % db_batch_size
+                    last_remaining_element_of_last_batch = first_index + (db_batch_size -remaining_records_of_last_batch)
+                    print("las remaining index is:")
+                    print(last_remaining_element_of_last_batch)
+                    
+                    prev_storage_time = obd2_data_frame['storage_time'].iloc[first_index - 1]
+                    print("prev storage time is:")
+                    print(prev_storage_time)
+                    print(type(prev_storage_time))
+                    
+                    print("After second step")
+                    print(list(obd2_data_frame['storage_time']))
+                    
+                    obd2_data_frame['storage_time'].iloc[first_index: last_remaining_element_of_last_batch] = prev_storage_time
+                    #obd2_data_frame.loc[first_index: last_remaining_element_of_last_batch, obd2_data_frame.columns.get_loc('storage_time')] = prev_storage_time
+                    
+                    print("After third step")
+                    print(list(obd2_data_frame['storage_time']))
+                    
+                    obd2_data_frame['storage_time'].iloc[last_remaining_element_of_last_batch:] = last_storage_timestamp
+                    #obd2_data_frame.loc[last_remaining_element_of_last_batch:, 'storage_time'] = last_storage_timestamp
+                    
+                    
+                else:
+                    print("Error in shofting records")
+                    
+        else:
+            print("Single Insertion")
+            obd2_data_frame['storage_time'] = obd2_data_frame['storage_time'].shift(-1)
+            obd2_data_frame.iloc[-1, obd2_data_frame.columns.get_loc('storage_time')] = last_storage_timestamp
+
+        
         if type(obd2_data_frame['storage_time'].iloc[0]) == str:
             print("Converting storage time to datetime")
             obd2_data_frame['storage_time'] = pd.to_datetime(obd2_data_frame['storage_time'], format='%Y-%m-%d %H:%M:%S.%f')
-            
         
-
         
         print("Calculating time difference")
         
@@ -332,13 +410,20 @@ def createExcelFile(obd2_data_frame,server_tech):
         comm_latency_sec = obd2_data_frame['rx_time'] - obd2_data_frame['tx_time']
         obd2_data_frame['comm_latency_sec'] = comm_latency_sec.dt.total_seconds().abs()
         average_communication_latency = obd2_data_frame['comm_latency_sec'].mean()
+        max_communication_latency = obd2_data_frame['comm_latency_sec'].max()
+        min_communication_latency = obd2_data_frame['comm_latency_sec'].min()
          
         write_latency_sec = obd2_data_frame['storage_time'] - obd2_data_frame['rx_time']
         obd2_data_frame['write_latency_sec'] = write_latency_sec.dt.total_seconds().abs()
         average_storage_latency = obd2_data_frame['write_latency_sec'].mean()
+        max_storage_latency = obd2_data_frame['write_latency_sec'].max()
+        min_storage_latency = obd2_data_frame['write_latency_sec'].min()
+        
 
         obd2_data_frame['transaction_latency_sec'] = obd2_data_frame['comm_latency_sec'] + obd2_data_frame['write_latency_sec']
         average_transaction_latency = obd2_data_frame['transaction_latency_sec'].mean()
+        max_transaction_latency = obd2_data_frame['transaction_latency_sec'].max()
+        min_transaction_latency = obd2_data_frame['transaction_latency_sec'].min()
 
         no_of_cars = obd2_data_frame['vehicle_id'].nunique()
 

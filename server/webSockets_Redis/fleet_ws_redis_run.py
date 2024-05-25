@@ -3,17 +3,26 @@ import websockets
 import multiprocessing
 import aioredis
 import pandas as pd
-from datetime import datetime
+from datetime import datetime,timezone
 import time
 from concurrent.futures import ThreadPoolExecutor
 
 websocket_port_number = 8765
-db_batch_size = 100
+
 
 websocket_port = 8765
 
+db_batch_size = 100
 
 inserted_msg_count = 0
+
+
+def string_to_int_timestamp(timestamp_str, format='%Y-%m-%d %H:%M:%S.%f'):
+    dt = datetime.strptime(timestamp_str, format)
+    # Convert to Unix timestamp (seconds since the epoch)
+    int_timestamp = int(dt.replace(tzinfo=timezone.utc).timestamp())
+    return int_timestamp
+        
 
 def getcurrentTimestamp():
     now = datetime.now()
@@ -21,7 +30,7 @@ def getcurrentTimestamp():
     return formatted_date_time
 
 
-async def writeBatchToRedis(redis, messages_batch):
+async def writeBatchToRedis(redis, messages_batch,storage_timestamp):
     
     batch_size = len(messages_batch)
     starting_msg_id = await redis.incrby('message_id', batch_size) - batch_size + 1
@@ -31,10 +40,7 @@ async def writeBatchToRedis(redis, messages_batch):
         for i, message in enumerate(messages_batch):
             msg_id = starting_msg_id + i
             
-
-            storage_time = getcurrentTimestamp()
-            
-            message_with_timestamp = f"{message},{storage_time}"
+            message_with_timestamp = f"{message},{storage_timestamp}"
         
             # Append message to Redis pipeline
             pipeline.set(f'message:{msg_id}', message_with_timestamp)
@@ -42,9 +48,12 @@ async def writeBatchToRedis(redis, messages_batch):
         # Execute the pipeline (batch write)
         await pipeline.execute()
     
-async def dbBatchWriter(queue,no_of_inserted_msgs_obj):
+async def dbBatchWriter(queue,last_storage_timestamp_obj):
     redis = None
     inserted_msg_count = 0
+    
+    
+    last_storage_timestamp = "NONE"
     
     try:    
         # Connect to Redis using the new aioredis 2.0 syntax
@@ -63,30 +72,34 @@ async def dbBatchWriter(queue,no_of_inserted_msgs_obj):
             
             # Check if batch size is reached
             if len(messages_batch) >= db_batch_size:
-                await writeBatchToRedis(redis, messages_batch)
+                await writeBatchToRedis(redis, messages_batch,last_storage_timestamp)
+                last_storage_timestamp = getcurrentTimestamp()
                 inserted_msg_count += db_batch_size
                 messages_batch = []  # Reset batch
             
         # Write any remaining messages in the last batch
         if len(messages_batch) > 0:
-            await writeBatchToRedis(redis, messages_batch)
-            inserted_msg_count += len(messages_batch)
+            await writeBatchToRedis(redis, messages_batch,last_storage_timestamp)
+            last_storage_timestamp = getcurrentTimestamp()
     except Exception as e:
         print(f"An error occurred: {e} in {message}")
 
     finally:
-        with no_of_inserted_msgs_obj.get_lock():
-            no_of_inserted_msgs_obj.value = inserted_msg_count
+        with last_storage_timestamp_obj.get_lock():
+            last_storage_timestamp_obj.value = string_to_int_timestamp(last_storage_timestamp)
+    
         # Close Redis connection explicitly
         if redis is not None:
             await redis.close()      
 
 
     
-async def dbWriter(queue,no_of_inserted_msgs_obj):
+async def dbWriter(queue,last_storage_timestamp_obj):
     
     redis = None
     inserted_msg_count = 0
+    
+    last_storage_timestamp = "NONE"
     
     try:    
         # Connect to Redis using the new aioredis 2.0 syntax
@@ -99,30 +112,30 @@ async def dbWriter(queue,no_of_inserted_msgs_obj):
                 break
             
             msg_id = await redis.incr('message_id')
-        
-            # Format as day and time
-            storage_time = getcurrentTimestamp()
-            #print(message)
             
-            message_with_timestamp = f"{message},{storage_time}"
+            message_with_timestamp = f"{message},{last_storage_timestamp}"
             await redis.set(f'message:{msg_id}', message_with_timestamp)
+            
+            last_storage_timestamp = getcurrentTimestamp()
             inserted_msg_count += 1
       
     except Exception as e:
         print(f"An error occurred: {e}")
 
     finally:
-        with no_of_inserted_msgs_obj.get_lock():
-            no_of_inserted_msgs_obj.value = inserted_msg_count
-            
+        with last_storage_timestamp_obj.get_lock():
+            last_storage_timestamp_obj.value = string_to_int_timestamp(last_storage_timestamp)
+        
+        # Close Redis connection explicitly
         if 'redis' in locals():
             await redis.close()      
 
-def dbWriterProcess(queue,no_of_inserted_msgs_obj,use_database_timestamp):
-    asyncio.run(dbWriter(queue,no_of_inserted_msgs_obj))
+def dbWriterProcess(queue,last_storage_timestamp_obj,use_database_timestamp):
+    asyncio.run(dbWriter(queue,last_storage_timestamp_obj))
 
-def dbBatchWriterProcess(queue,no_of_inserted_msgs_obj,use_database_timestamp):
-    asyncio.run(dbBatchWriter(queue,no_of_inserted_msgs_obj))
+def dbBatchWriterProcess(queue,last_storage_timestamp_obj,use_database_timestamp):
+
+    asyncio.run(dbBatchWriter(queue,last_storage_timestamp_obj))
 
 
 async def websocketServerHandler(websocket, path, queue,no_of_received_msgs_obj,no_of_sent_msgs_obj,stop_event):
@@ -151,7 +164,7 @@ async def websocketServerHandler(websocket, path, queue,no_of_received_msgs_obj,
         queue.put("STOP")
         
         with no_of_received_msgs_obj.get_lock():
-                no_of_received_msgs_obj.value = received_msg_count
+            no_of_received_msgs_obj.value = received_msg_count
         stop_event.set()
         await websocket.close()
 
@@ -194,7 +207,6 @@ def extractFromDatabase(use_database_timestamp):
     data_list = []
     
     for elm in data:
-        #print(elm['Message'])
         elm_list = elm['Message'].replace("[", "").replace("]", "").replace("'", "").strip().split(',')
         data_list.append(elm_list)
         
@@ -213,7 +225,7 @@ def extractFromDatabase(use_database_timestamp):
     #print(df["tx_time"])
     
     
-    return df
+    return df,db_batch_size
     
 
 if __name__ == "__main__":
