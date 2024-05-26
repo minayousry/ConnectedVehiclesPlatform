@@ -406,6 +406,9 @@ def createExcelFile(obd2_data_frame,server_tech,is_batch_insertion,db_batch_size
         
         print("Calculating time difference")
         
+        #drop the first row as the storage time is not accurate
+        obd2_data_frame.drop(obd2_data_frame.index[0], inplace=True)
+        
         
         comm_latency_sec = obd2_data_frame['rx_time'] - obd2_data_frame['tx_time']
         obd2_data_frame['comm_latency_sec'] = comm_latency_sec.dt.total_seconds().abs()

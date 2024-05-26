@@ -14,7 +14,9 @@ new_username = 'guest'
 
 def createTable(cursor,use_database_timestamp):
 
-    sql_creation_query = f"""
+    if use_database_timestamp:
+        
+        sql_creation_query = f"""
                             CREATE TABLE IF NOT EXISTS {table_name} (
                             id SERIAL PRIMARY KEY,
                             vehicle_id TEXT,
@@ -35,9 +37,30 @@ def createTable(cursor,use_database_timestamp):
                             rx_time TIMESTAMP WITHOUT TIME ZONE,
                             storage_time TIMESTAMP WITHOUT TIME ZONE """
                             
-    if use_database_timestamp:
-        sql_creation_query += "DEFAULT CURRENT_TIMESTAMP"
-        
+        if use_database_timestamp:
+            sql_creation_query += "DEFAULT CURRENT_TIMESTAMP"
+    else:
+        sql_creation_query = f"""
+                            CREATE TABLE IF NOT EXISTS {table_name} (
+                            id SERIAL PRIMARY KEY,
+                            vehicle_id TEXT,
+                            tx_time TEXT,
+                            x_pos DOUBLE PRECISION,
+                            y_pos DOUBLE PRECISION,
+                            gps_lon DOUBLE PRECISION,
+                            gps_lat DOUBLE PRECISION,
+                            speed DOUBLE PRECISION,
+                            road_id TEXT,
+                            lane_id TEXT,
+                            displacement DOUBLE PRECISION,
+                            turn_angle DOUBLE PRECISION,
+                            acceleration DOUBLE PRECISION,
+                            fuel_consumption DOUBLE PRECISION,
+                            co2_consumption DOUBLE PRECISION,
+                            deceleration DOUBLE PRECISION,
+                            rx_time TEXT,
+                            storage_time TEXT """
+                            
     sql_creation_query += ");"
     
     cursor.execute(sql_creation_query)

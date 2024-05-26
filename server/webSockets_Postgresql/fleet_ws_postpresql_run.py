@@ -4,7 +4,7 @@ import websockets
 import multiprocessing
 import aiopg
 import pandas as pd
-from datetime import datetime
+from datetime import datetime,timezone
 import time
 from concurrent.futures import ThreadPoolExecutor
 import psycopg2
@@ -23,7 +23,12 @@ db_batch_size = 100
 websocket_port = 8765
 
 
-inserted_msg_count = 0
+def string_to_int_timestamp(timestamp_str, format='%Y-%m-%d %H:%M:%S.%f'):
+    dt = datetime.strptime(timestamp_str, format)
+    # Convert to Unix timestamp (seconds since the epoch)
+    int_timestamp = int(dt.replace(tzinfo=timezone.utc).timestamp())
+    return int_timestamp
+        
 
 def getcurrentTimestamp():
     now = datetime.now()
@@ -46,8 +51,7 @@ def closeDatabaseConnection(cursor,conn):
 
 
 
-
-def preprocessData(data,use_database_timestamp):
+def preprocessData(data,use_database_timestamp,current_timestamp):
     
     record = ()
 
@@ -71,7 +75,6 @@ def preprocessData(data,use_database_timestamp):
                     data[15]                # rx_time
                     )
     else:
-        current_timestamp = getcurrentTimestamp()
         record = (
                     data[0],                # vehicle_id
                     data[1],            # tx_time
@@ -178,13 +181,15 @@ def insertRecord(conn, record,insert_query):
         conn.rollback()  
 
 
-def storeInDatabaseProcess(queue, no_of_inserted_msgs_obj,use_database_timestamp):
-    
-    global inserted_msg_count
+def storeInDatabaseProcess(queue, last_storage_timestamp_obj,use_database_timestamp):
     
     conn,cursor = connectToDatabase()
 
     insert_query = getInsertionSqlQuery(use_database_timestamp)
+    
+    current_datetime = datetime.now()
+    # Set the time to midnight (00:00:00)
+    last_storage_timestamp = current_datetime.replace(year = 1,month = 1,day = 1,hour=0, minute=0, second=0, microsecond=0)
 
     try:
         while True:
@@ -193,19 +198,17 @@ def storeInDatabaseProcess(queue, no_of_inserted_msgs_obj,use_database_timestamp
                 print("Stopping the database process...")
                 break
             
-            
-
             if not use_database_timestamp:
-                current_time = getcurrentTimestamp()
-                data.append(current_time)
+                data.append(last_storage_timestamp)
             insertRecord(conn,data,insert_query)
-            inserted_msg_count += 1
+            last_storage_timestamp = getcurrentTimestamp()
+
             
     except Exception as e:
         print(f"Failed to insert record because of error {e}")
     finally:
-        with no_of_inserted_msgs_obj.get_lock():
-            no_of_inserted_msgs_obj.value = inserted_msg_count
+        with last_storage_timestamp_obj.get_lock():
+            last_storage_timestamp_obj.value = string_to_int_timestamp(last_storage_timestamp)
         closeDatabaseConnection(conn,cursor)
 
 
@@ -218,9 +221,13 @@ def insertRecords(conn, records,insert_query):
         conn.rollback()
         print(f"Failed to insert batch: {e}")
 
-def storeInDatabaseBatchProcess(queue, no_of_inserted_msgs_obj,use_database_timestamp):
+def storeInDatabaseBatchProcess(queue, last_storage_timestamp_obj,use_database_timestamp):
 
-    global inserted_msg_count
+    
+    current_datetime = datetime.now()
+    # Set the time to midnight (00:00:00)
+    last_storage_timestamp = current_datetime.replace(year = 1,month = 1,day = 1,hour=0, minute=0, second=0, microsecond=0)
+
     
     conn,cursor = connectToDatabase()
 
@@ -238,19 +245,19 @@ def storeInDatabaseBatchProcess(queue, no_of_inserted_msgs_obj,use_database_time
             if data == "STOP":
                 if len(records_to_insert) > 0:
                     insertRecords(conn, records_to_insert,insert_query)
-                    inserted_msg_count += len(records_to_insert)   
+                    last_storage_timestamp = getcurrentTimestamp()
                 break
             else:
-                records_to_insert.append(preprocessData(data,use_database_timestamp))
+                records_to_insert.append(preprocessData(data,use_database_timestamp,last_storage_timestamp))
             
-                if len(records_to_insert) >= db_batch_size:  # Adjust batch size as appropriate
+                if len(records_to_insert) >= db_batch_size:
                     insertRecords(conn, records_to_insert,insert_query)
-                    inserted_msg_count += db_batch_size
+                    last_storage_timestamp = getcurrentTimestamp()
                     records_to_insert = []
 
     finally:
-        with no_of_inserted_msgs_obj.get_lock():
-            no_of_inserted_msgs_obj.value = inserted_msg_count
+        with last_storage_timestamp_obj.get_lock():
+            last_storage_timestamp_obj.value = string_to_int_timestamp(last_storage_timestamp)
         closeDatabaseConnection(conn,cursor)
 
 
@@ -273,7 +280,7 @@ def extractFromDatabase(use_database_timestamp):
     # Close the database connection
     closeDatabaseConnection(conn,cursor)
     
-    return df
+    return df,db_batch_size
 
 
 
