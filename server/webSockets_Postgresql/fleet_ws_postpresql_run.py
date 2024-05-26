@@ -23,12 +23,10 @@ db_batch_size = 100
 websocket_port = 8765
 
 
-def string_to_int_timestamp(timestamp_str, format='%Y-%m-%d %H:%M:%S.%f'):
+def stringToFloatTimestamp(timestamp_str, format='%Y-%m-%d %H:%M:%S.%f'):
     dt = datetime.strptime(timestamp_str, format)
-    # Convert to Unix timestamp (seconds since the epoch)
-    int_timestamp = int(dt.replace(tzinfo=timezone.utc).timestamp())
-    return int_timestamp
-        
+    float_timestamp = dt.replace(tzinfo=timezone.utc).timestamp()
+    return float_timestamp
 
 def getcurrentTimestamp():
     now = datetime.now()
@@ -186,10 +184,8 @@ def storeInDatabaseProcess(queue, last_storage_timestamp_obj,use_database_timest
     conn,cursor = connectToDatabase()
 
     insert_query = getInsertionSqlQuery(use_database_timestamp)
-    
-    current_datetime = datetime.now()
-    # Set the time to midnight (00:00:00)
-    last_storage_timestamp = current_datetime.replace(year = 1,month = 1,day = 1,hour=0, minute=0, second=0, microsecond=0)
+
+    last_storage_timestamp = "None"
 
     try:
         while True:
@@ -208,7 +204,7 @@ def storeInDatabaseProcess(queue, last_storage_timestamp_obj,use_database_timest
         print(f"Failed to insert record because of error {e}")
     finally:
         with last_storage_timestamp_obj.get_lock():
-            last_storage_timestamp_obj.value = string_to_int_timestamp(last_storage_timestamp)
+            last_storage_timestamp_obj.value = stringToFloatTimestamp(last_storage_timestamp)
         closeDatabaseConnection(conn,cursor)
 
 
@@ -224,9 +220,8 @@ def insertRecords(conn, records,insert_query):
 def storeInDatabaseBatchProcess(queue, last_storage_timestamp_obj,use_database_timestamp):
 
     
-    current_datetime = datetime.now()
-    # Set the time to midnight (00:00:00)
-    last_storage_timestamp = current_datetime.replace(year = 1,month = 1,day = 1,hour=0, minute=0, second=0, microsecond=0)
+
+    last_storage_timestamp = "None"
 
     
     conn,cursor = connectToDatabase()
@@ -257,7 +252,7 @@ def storeInDatabaseBatchProcess(queue, last_storage_timestamp_obj,use_database_t
 
     finally:
         with last_storage_timestamp_obj.get_lock():
-            last_storage_timestamp_obj.value = string_to_int_timestamp(last_storage_timestamp)
+            last_storage_timestamp_obj.value = stringToFloatTimestamp(last_storage_timestamp)
         closeDatabaseConnection(conn,cursor)
 
 

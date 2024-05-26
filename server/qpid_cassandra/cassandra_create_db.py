@@ -12,7 +12,7 @@ server_address = '127.0.0.1'
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-def createKeyspaceAndTable(session):
+def createKeyspaceAndTable(session,use_database_timestamp):
     
     # Initialize logging
     
@@ -32,30 +32,53 @@ def createKeyspaceAndTable(session):
         # Set keyspace
         session.set_keyspace(keyspace_name)
 
-        # Create table if it does not exist
-        table_query = f"""
-            CREATE TABLE IF NOT EXISTS {table_name} (
-            id uuid PRIMARY KEY,
-            vehicle_id text,
-            tx_time timestamp,
-            x_pos double,
-            y_pos double,
-            gps_lon double,
-            gps_lat double,
-            speed double,
-            road_id text,
-            lane_id text,
-            displacement double,
-            turn_angle double,
-            acceleration double,
-            fuel_consumption double,
-            co2_consumption double,
-            deceleration double,
-            rx_time timestamp,
-            storage_time timestamp
-        );
-        """
-    
+        if use_database_timestamp:
+            # Create table if it does not exist
+            table_query = f"""
+                CREATE TABLE IF NOT EXISTS {table_name} (
+                id uuid PRIMARY KEY,
+                vehicle_id text,
+                tx_time timestamp,
+                x_pos double,
+                y_pos double,
+                gps_lon double,
+                gps_lat double,
+                speed double,
+                road_id text,
+                lane_id text,
+                displacement double,
+                turn_angle double,
+                acceleration double,
+                fuel_consumption double,
+                co2_consumption double,
+                deceleration double,
+                rx_time timestamp,
+                storage_time timestamp
+            );
+            """
+        else:
+            table_query = f"""
+                CREATE TABLE IF NOT EXISTS {table_name} (
+                id uuid PRIMARY KEY,
+                vehicle_id text,
+                tx_time text,
+                x_pos double,
+                y_pos double,
+                gps_lon double,
+                gps_lat double,
+                speed double,
+                road_id text,
+                lane_id text,
+                displacement double,
+                turn_angle double,
+                acceleration double,
+                fuel_consumption double,
+                co2_consumption double,
+                deceleration double,
+                rx_time text,
+                storage_time text
+            );
+            """
     
         session.execute(table_query)
         logging.info(f"Table '{table_name}' created or already exists.")
@@ -83,7 +106,7 @@ def createDatabase(use_database_timestamp):
         
         
         dropKeyspace(session)
-        createKeyspaceAndTable(session)
+        createKeyspaceAndTable(session,use_database_timestamp)
         status =  True
     except Exception as e:
         print("error while creating database.")

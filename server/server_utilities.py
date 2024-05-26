@@ -363,29 +363,19 @@ def createExcelFile(obd2_data_frame,server_tech,is_batch_insertion,db_batch_size
                 storage_time_list = list(obd2_data_frame['storage_time'])
                 first_index = storage_time_list.index(None)
                 
+                
 
                 if first_index != -1:
-                    print("First nan index is:")
-                    print(first_index)
+
                     remaining_records_of_last_batch = no_of_inserted_transactions % db_batch_size
                     last_remaining_element_of_last_batch = first_index + (db_batch_size -remaining_records_of_last_batch)
-                    print("las remaining index is:")
-                    print(last_remaining_element_of_last_batch)
-                    
+
                     prev_storage_time = obd2_data_frame['storage_time'].iloc[first_index - 1]
-                    print("prev storage time is:")
-                    print(prev_storage_time)
-                    print(type(prev_storage_time))
-                    
-                    print("After second step")
-                    print(list(obd2_data_frame['storage_time']))
-                    
+
                     obd2_data_frame['storage_time'].iloc[first_index: last_remaining_element_of_last_batch] = prev_storage_time
                     #obd2_data_frame.loc[first_index: last_remaining_element_of_last_batch, obd2_data_frame.columns.get_loc('storage_time')] = prev_storage_time
                     
-                    print("After third step")
-                    print(list(obd2_data_frame['storage_time']))
-                    
+
                     obd2_data_frame['storage_time'].iloc[last_remaining_element_of_last_batch:] = last_storage_timestamp
                     #obd2_data_frame.loc[last_remaining_element_of_last_batch:, 'storage_time'] = last_storage_timestamp
                     
@@ -411,13 +401,13 @@ def createExcelFile(obd2_data_frame,server_tech,is_batch_insertion,db_batch_size
         
         
         comm_latency_sec = obd2_data_frame['rx_time'] - obd2_data_frame['tx_time']
-        obd2_data_frame['comm_latency_sec'] = comm_latency_sec.dt.total_seconds().abs()
+        obd2_data_frame['comm_latency_sec'] = comm_latency_sec.dt.total_seconds()
         average_communication_latency = obd2_data_frame['comm_latency_sec'].mean()
         max_communication_latency = obd2_data_frame['comm_latency_sec'].max()
         min_communication_latency = obd2_data_frame['comm_latency_sec'].min()
          
         write_latency_sec = obd2_data_frame['storage_time'] - obd2_data_frame['rx_time']
-        obd2_data_frame['write_latency_sec'] = write_latency_sec.dt.total_seconds().abs()
+        obd2_data_frame['write_latency_sec'] = write_latency_sec.dt.total_seconds()
         average_storage_latency = obd2_data_frame['write_latency_sec'].mean()
         max_storage_latency = obd2_data_frame['write_latency_sec'].max()
         min_storage_latency = obd2_data_frame['write_latency_sec'].min()

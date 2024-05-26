@@ -18,12 +18,12 @@ from datetime import datetime,timezone
 
 
 
-def int_to_string_timestamp(last_storage_timestamp_obj, format='%Y-%m-%d %H:%M:%S.%f'):
-    int_timestamp = 0
+def floatToStringTimestamp(last_storage_timestamp_obj, format='%Y-%m-%d %H:%M:%S.%f'):
+    float_timestamp = 0
     with last_storage_timestamp_obj.get_lock():
-        int_timestamp = last_storage_timestamp_obj.value
+        float_timestamp = last_storage_timestamp_obj.value
         
-    dt = datetime.fromtimestamp(int_timestamp, tz=timezone.utc)
+    dt = datetime.fromtimestamp(float_timestamp, tz=timezone.utc)
     timestamp_str = dt.strftime(format)
     return timestamp_str
 
@@ -33,7 +33,7 @@ def runProcesses(server_tech,comm_process, database_process):
 
     no_of_received_msgs_obj = multiprocessing.Value('i', 0)
     no_of_sent_msgs_obj = multiprocessing.Value('i', 0)
-    last_storage_timestamp_obj = multiprocessing.Value('i', 0)
+    last_storage_timestamp_obj = multiprocessing.Value('d', 0.0)
     
     total_size_bytes = 9900000
     if server_tech == "mqtt_influx":
@@ -72,7 +72,7 @@ def runProcesses(server_tech,comm_process, database_process):
         print(f"An error occurred: {e}")
         result = False
     finally:
-        timestamp_str = int_to_string_timestamp(last_storage_timestamp_obj)
+        timestamp_str = floatToStringTimestamp(last_storage_timestamp_obj)
         
         return result,no_of_received_msgs_obj.value,no_of_sent_msgs_obj.value,timestamp_str
 

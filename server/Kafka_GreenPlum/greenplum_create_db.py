@@ -19,10 +19,49 @@ dbname = "OBD2_Data_Fleet_database"
 table_name = "OBD2_table"
 db_batch_size = 100
 
+def get_all_column_types(conn):
+    try:
+        cursor = conn.cursor()
+        
+        # Query to fetch all tables in the current database schema
+        fetch_tables_query = """
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_type = 'BASE TABLE';
+        """
+        cursor.execute(fetch_tables_query)
+        tables = cursor.fetchall()
+
+        # Iterate through all tables and fetch column names and types
+        for table in tables:
+            table_name = table[0]
+            print(f"Table: {table_name}")
+            
+            fetch_columns_query = """
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = %s;
+            """
+            cursor.execute(fetch_columns_query, (table_name,))
+            columns = cursor.fetchall()
+            
+            for column_name, data_type in columns:
+                print(f"    {column_name}: {data_type}")
+            print()  # Print a newline for better readability
+
+        cursor.close()
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        
+
+
+
 def createTable(cursor,use_database_timestamp):
 
-    print("Create Table")
-    sql_creation_query = f"""
+    sql_creation_query = ""
+    if use_database_timestamp:
+        
+        sql_creation_query = f"""
                             CREATE TABLE IF NOT EXISTS {table_name} (
                             id SERIAL PRIMARY KEY,
                             vehicle_id TEXT,
@@ -43,17 +82,44 @@ def createTable(cursor,use_database_timestamp):
                             rx_time TIMESTAMP WITHOUT TIME ZONE,
                             storage_time TIMESTAMP WITHOUT TIME ZONE """
                             
-    if use_database_timestamp:
         sql_creation_query += "DEFAULT CURRENT_TIMESTAMP"
         
+    else:
+        sql_creation_query = f"""
+                            CREATE TABLE IF NOT EXISTS {table_name} (
+                            id SERIAL PRIMARY KEY,
+                            vehicle_id TEXT,
+                            tx_time TEXT,
+                            x_pos DOUBLE PRECISION,
+                            y_pos DOUBLE PRECISION,
+                            gps_lon DOUBLE PRECISION,
+                            gps_lat DOUBLE PRECISION,
+                            speed DOUBLE PRECISION,
+                            road_id TEXT,
+                            lane_id TEXT,
+                            displacement DOUBLE PRECISION,
+                            turn_angle DOUBLE PRECISION,
+                            acceleration DOUBLE PRECISION,
+                            fuel_consumption DOUBLE PRECISION,
+                            co2_consumption DOUBLE PRECISION,
+                            deceleration DOUBLE PRECISION,
+                            rx_time TEXT,
+                            storage_time TEXT """
+                            
     sql_creation_query += ");"
     
-    cursor.execute(sql_creation_query)
+    try:
+        cursor.execute(sql_creation_query)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        
+    
+
 
 
 def dropTableIfExists(conn,cursor):
     try:
-        drop_statement = sql.SQL("DROP TABLE IF EXISTS {};").format(sql.Identifier(table_name))
+        drop_statement = f"DROP TABLE IF EXISTS {table_name};"
         
         # Execute the DROP TABLE statement
         cursor.execute(drop_statement)
@@ -131,8 +197,10 @@ def createDatabase(use_database_timestamp):
         
         dropTableIfExists(conn,cursor)     
         createTable(cursor,use_database_timestamp)
+        get_all_column_types(conn)
         clearTableIfExists(conn,cursor)
         closeDatabaseConnection(cursor,conn)
+        
         return True
     except Exception as e:
         print(f"An error occurred: {e}")

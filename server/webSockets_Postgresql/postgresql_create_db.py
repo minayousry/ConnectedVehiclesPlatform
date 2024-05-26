@@ -37,8 +37,8 @@ def createTable(cursor,use_database_timestamp):
                             rx_time TIMESTAMP WITHOUT TIME ZONE,
                             storage_time TIMESTAMP WITHOUT TIME ZONE """
                             
-        if use_database_timestamp:
-            sql_creation_query += "DEFAULT CURRENT_TIMESTAMP"
+        sql_creation_query += "DEFAULT CURRENT_TIMESTAMP"
+        
     else:
         sql_creation_query = f"""
                             CREATE TABLE IF NOT EXISTS {table_name} (

@@ -6,7 +6,7 @@ from proton import Message
 from proton import Event
 import time
 from uuid import uuid4
-from datetime import datetime
+from datetime import datetime, timezone
 import pandas as pd
 from cassandra.policies import DCAwareRoundRobinPolicy
 import sys
@@ -15,7 +15,7 @@ import logging
 from cassandra.query import SimpleStatement
 
 received_msg_count = 0
-inserted_msg_count = 0
+
 
 
 #Qpid configurations
@@ -29,6 +29,12 @@ table_name = "obd2_data"
 server_address = '127.0.0.1'
 
 db_batch_size = 100
+
+
+def stringToFloatTimestamp(timestamp_str, format='%Y-%m-%d %H:%M:%S.%f'):
+    dt = datetime.strptime(timestamp_str, format)
+    float_timestamp = dt.replace(tzinfo=timezone.utc).timestamp()
+    return float_timestamp
 
 def getcurrentTimestamp():
     now = datetime.now()
@@ -65,10 +71,11 @@ class Receiver(MessagingHandler):
 
     def on_message(self, event):
         try:
+            
             message = event.message.body
+            current_timestamp = getcurrentTimestamp()
             #print(f"Received message: {message}")
             if message[0] != "STOP":
-                current_timestamp = getcurrentTimestamp()
                 message.append(current_timestamp)
                 self.queue.put(message)
                 event.receiver.flow(1)
@@ -106,11 +113,11 @@ def getCluster():
     
 
     
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+#logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     
-def databaseProcess(queue,no_of_inserted_msgs,use_database_timestamp):
+def databaseProcess(queue,last_storage_timestamp_obj,use_database_timestamp):
     
-    global inserted_msg_count
+    last_storage_timestamp = "NONE"
     
     # Parameterized query for security
     insert_query = f"INSERT INTO {keyspace_name}.{table_name} (id, vehicle_id,tx_time,x_pos,y_pos, \
@@ -133,22 +140,22 @@ def databaseProcess(queue,no_of_inserted_msgs,use_database_timestamp):
             
             
             
-            storage_time  = getcurrentTimestamp()                                                 
+                                                            
             
             session.execute(insert_query,( uuid4(), message[0],message[1],message[2],message[3] \
                                             ,message[4],message[5],message[6],message[7],message[8] \
                                             ,message[9],message[10],message[11],message[12],message[13] \
-                                            ,message[14], message[15], storage_time
+                                            ,message[14], message[15], last_storage_timestamp
                                         ) )
-            inserted_msg_count += 1
+            last_storage_timestamp  = getcurrentTimestamp() 
             
             
             
     except Exception as e:
         print(f"Error during database operation for {message}: {e}")
     finally:
-        with no_of_inserted_msgs.get_lock():
-                no_of_inserted_msgs.value = inserted_msg_count
+        with last_storage_timestamp_obj.get_lock():
+            last_storage_timestamp_obj.value = stringToFloatTimestamp(last_storage_timestamp)
         if 'session' in locals():
             print("closing session")
             session.shutdown()
@@ -157,10 +164,8 @@ def databaseProcess(queue,no_of_inserted_msgs,use_database_timestamp):
             cluster.shutdown()
         
 
-def insertBatch(session, batch,insert_query):
+def insertBatch(session, batch,insert_query,storage_time):
 
-
-    storage_time = getcurrentTimestamp()
 
     for message in batch:
         session.execute(insert_query, (uuid4(), message[0], message[1], message[2], message[3], \
@@ -168,9 +173,16 @@ def insertBatch(session, batch,insert_query):
                                         message[9], message[10], message[11], message[12], message[13], \
                                         message[14],message[15], storage_time))      
 
-def databaseBatchProcess(queue,no_of_inserted_msgs,use_database_timestamp):
+def databaseBatchProcess(queue,last_storage_timestamp_obj,use_database_timestamp):
     
-    global inserted_msg_count
+
+    last_storage_timestamp = "None"
+
+    
+    # Parameterized query for security
+    
+
+
     
     insert_query = f"INSERT INTO {table_name} (id, vehicle_id, tx_time, x_pos, y_pos, \
                                                gps_lon, gps_lat, speed, road_id, lane_id, \
@@ -197,22 +209,22 @@ def databaseBatchProcess(queue,no_of_inserted_msgs,use_database_timestamp):
 
             # Check if batch size is reached
             if len(batch) >= db_batch_size:
-                insertBatch(session, batch,insert_query)
+                insertBatch(session, batch,insert_query,last_storage_timestamp)
+                last_storage_timestamp = getcurrentTimestamp()
                 batch_count += 1
-                inserted_msg_count += db_batch_size
                 batch = []
 
         # Insert remaining records if any
         if len(batch) > 0:
-            insertBatch(session,batch,insert_query)
-            inserted_msg_count += len(batch)
+            insertBatch(session,batch,insert_query,last_storage_timestamp)
+            last_storage_timestamp = getcurrentTimestamp()
             batch_count += 1
 
     except Exception as e:
         print(f"Error during database operation: {e}")
     finally:
-        with no_of_inserted_msgs.get_lock():
-                no_of_inserted_msgs.value = inserted_msg_count
+        with last_storage_timestamp_obj.get_lock():
+            last_storage_timestamp_obj.value = stringToFloatTimestamp(last_storage_timestamp)
         if 'session' in locals():
             print("closing session")
             session.shutdown()
@@ -221,7 +233,7 @@ def databaseBatchProcess(queue,no_of_inserted_msgs,use_database_timestamp):
             cluster.shutdown()
 
 
-def extractFromDatabase(x):
+def extractFromDatabase(use_database_timestamp):
     result = None
     cluster = None
     session = None
@@ -261,7 +273,7 @@ def extractFromDatabase(x):
         if cluster:
             cluster.shutdown()
 
-    return result
+    return result,db_batch_size
 
 
 

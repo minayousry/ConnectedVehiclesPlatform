@@ -14,14 +14,12 @@ websocket_port = 8765
 
 db_batch_size = 100
 
-inserted_msg_count = 0
 
 
-def string_to_int_timestamp(timestamp_str, format='%Y-%m-%d %H:%M:%S.%f'):
+def stringToFloatTimestamp(timestamp_str, format='%Y-%m-%d %H:%M:%S.%f'):
     dt = datetime.strptime(timestamp_str, format)
-    # Convert to Unix timestamp (seconds since the epoch)
-    int_timestamp = int(dt.replace(tzinfo=timezone.utc).timestamp())
-    return int_timestamp
+    float_timestamp = dt.replace(tzinfo=timezone.utc).timestamp()
+    return float_timestamp
         
 
 def getcurrentTimestamp():
@@ -74,7 +72,6 @@ async def dbBatchWriter(queue,last_storage_timestamp_obj):
             if len(messages_batch) >= db_batch_size:
                 await writeBatchToRedis(redis, messages_batch,last_storage_timestamp)
                 last_storage_timestamp = getcurrentTimestamp()
-                inserted_msg_count += db_batch_size
                 messages_batch = []  # Reset batch
             
         # Write any remaining messages in the last batch
@@ -86,8 +83,8 @@ async def dbBatchWriter(queue,last_storage_timestamp_obj):
 
     finally:
         with last_storage_timestamp_obj.get_lock():
-            last_storage_timestamp_obj.value = string_to_int_timestamp(last_storage_timestamp)
-    
+            last_storage_timestamp_obj.value = stringToFloatTimestamp(last_storage_timestamp)
+        
         # Close Redis connection explicitly
         if redis is not None:
             await redis.close()      
@@ -124,7 +121,7 @@ async def dbWriter(queue,last_storage_timestamp_obj):
 
     finally:
         with last_storage_timestamp_obj.get_lock():
-            last_storage_timestamp_obj.value = string_to_int_timestamp(last_storage_timestamp)
+            last_storage_timestamp_obj.value = stringToFloatTimestamp(last_storage_timestamp)
         
         # Close Redis connection explicitly
         if 'redis' in locals():
