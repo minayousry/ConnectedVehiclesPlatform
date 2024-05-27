@@ -8,45 +8,169 @@ reports_path = './' + reports_dir_name
 import numpy as np
 import matplotlib.pyplot as plt
 
+excel_info = {}
 
 com_tech_title_name = 'Communication Technology'
 storage_tech_title_name = 'Storage Technology' 
 
-# Sample multidimensional arrays
-x = np.array([[1, 2, 3, 4, 5],
-              [1, 2, 3, 4, 5]])
-y = np.array([[2, 4, 6, 8, 10],
-              [3, 6, 9, 12, 15]])
+colors_names = ['green','blue','red', 'yellow', 'purple']
 
-# Plotting the relationship between the arrays
-plt.plot(x[0], y[0], marker='o', linestyle='-', color='b', label='Array 1')
-plt.plot(x[1], y[1], marker='s', linestyle='--', color='r', label='Array 2')
+def PlotRelationShip(x, y,tech_list,operation,is_no_of_cars,storage_mode,tech_type):
 
-# Adding labels and title
-plt.xlabel('X Axis')
-plt.ylabel('Y Axis')
-plt.title('Relationship between two multidimensional arrays')
+    print(tech_list)
+    print(x)
+    print(y)
+    
+    # Plotting the relationship between the arrays
 
-# Example list of inputs for x
-x_values = [10, 12, 15, 20, 25]
+    for i in range(len(x)):
+        plt.plot(x[i], y[i], marker='s', linestyle='--', color=colors_names[i], label=str(tech_list[i]))
+    
+    
 
-# Calculate the standard deviation
-std_dev = np.std(x_values)
+    x_label = ""
+    y_label = ""
+    title = ""
+    
+    if is_no_of_cars:
+        x_label = 'No of Vehicles '
+    else:
+        x_label = 'No of Msgs '
+    
+    if operation == 'avg':
+        y_label = 'Avg time in seconds' 
+    else:
+        y_label = 'Standard deviation'
+    
+    title = y_label + " per "+ x_label + " - "+ storage_mode +" for "+ tech_type +" tech" 
+    
+    plt.xlabel(x_label)         
+    plt.ylabel(y_label)
+    plt.title(title)
+    plt.legend()
+    plt.grid(True)
 
-print("Standard Deviation:", std_dev)
-# Display the legend
-plt.legend()
-
-# Display the grid
-plt.grid(True)
-
-# Save the plot as an image file
-plt.savefig('plot.png')
-
-# Show the plot
-plt.show()
+    file_name = "./reports/"+title+".png"
+    plt.savefig(file_name)
+    
+    plt.close()
 
 
+
+
+def extractTechAccordingToUsage(tech_list):
+    
+    comm_tech_list = []
+    storage_tech_list = []
+    
+    for tech in tech_list:
+        extracted_tech = tech.split("_")
+        comm_tech_list.append(extracted_tech[0])
+        storage_tech_list.append(extracted_tech[1])
+    
+
+    return comm_tech_list,storage_tech_list
+
+
+def PlotOverallFigures():
+    
+    tech_list = []
+    
+    cars_no_batch_mode = []
+    cars_no_single_mode = []
+    
+    comm_avg_time_batch_mode = []
+    comm_avg_time_single_mode = []
+    
+    comm_std_batch_mode = []
+    comm_std_single_mode = []
+    
+    
+    storage_avg_time_batch_mode = []
+    storage_avg_time_single_mode = []
+    
+    storage_std_batch_mode = []
+    storage_std_single_mode = []
+    
+    
+    for tech in excel_info.keys():
+        tech_list.append(tech)
+        list_of_cars = list(excel_info[tech].keys())
+        
+        cars_no_int_list = [int(x) for x in list_of_cars]
+        cars_no_int_list.sort()
+        list_of_cars = [str(x) for x in cars_no_int_list]
+        
+        batch_no_of_cars = []
+        single_no_of_cars = []
+        
+        comm_avg_time_per_batch = []
+        comm_avg_time_per_single = []
+        
+        comm_std_per_batch = []
+        comm_std_per_single = []
+        
+        storage_avg_time_per_batch = []
+        storage_avg_time_per_single = []
+        
+        storage_std_per_batch = []
+        storage_std_per_single = []
+
+        for cars_no in list_of_cars:
+            
+            for storage_mode in excel_info[tech][cars_no].keys():
+                if storage_mode == "batch":
+                    batch_no_of_cars.append(int(cars_no))
+                    
+                    comm_avg_time_per_batch.append(excel_info[tech][cars_no][storage_mode]["communication info"].mean())
+                    comm_std_per_batch.append(excel_info[tech][cars_no][storage_mode]["communication info"].std())
+                    
+                    storage_avg_time_per_batch.append(excel_info[tech][cars_no][storage_mode]["storage info"].mean())
+                    storage_std_per_batch.append(excel_info[tech][cars_no][storage_mode]["storage info"].std())
+                    
+                else:
+                    single_no_of_cars.append(int(cars_no))
+                    
+                    comm_avg_time_per_single.append(excel_info[tech][cars_no][storage_mode]["communication info"].mean())
+                    comm_std_per_single.append(excel_info[tech][cars_no][storage_mode]["communication info"].std())
+                    
+                    storage_avg_time_per_single.append(excel_info[tech][cars_no][storage_mode]["storage info"].mean())
+                    storage_std_per_single.append(excel_info[tech][cars_no][storage_mode]["storage info"].std())
+        
+        cars_no_batch_mode.append(batch_no_of_cars)
+        cars_no_single_mode.append(single_no_of_cars)
+        
+        comm_avg_time_batch_mode.append(comm_avg_time_per_batch)
+        comm_avg_time_single_mode.append(comm_avg_time_per_single)
+        
+        comm_std_batch_mode.append(comm_std_per_batch)
+        comm_std_single_mode.append(comm_std_per_single)
+    
+        storage_avg_time_batch_mode.append(storage_avg_time_per_batch)
+        storage_avg_time_single_mode.append(storage_avg_time_per_single)
+    
+        storage_std_batch_mode.append(storage_std_per_batch)
+        storage_std_single_mode.append(storage_std_per_single)
+    
+        
+    comm_tech_list,storage_tech_list = extractTechAccordingToUsage(tech_list)
+        
+ 
+    PlotRelationShip(cars_no_batch_mode, comm_avg_time_batch_mode,comm_tech_list,"avg",True,"batch","communication")   
+    PlotRelationShip(cars_no_batch_mode, comm_std_batch_mode,comm_tech_list,"std",True,"batch","communication") 
+    
+    PlotRelationShip(cars_no_single_mode, comm_avg_time_single_mode,comm_tech_list,"avg",True,"single","communication")   
+    PlotRelationShip(cars_no_single_mode, comm_std_single_mode,comm_tech_list,"std",True,"single","communication")   
+    
+    PlotRelationShip(cars_no_batch_mode, storage_avg_time_batch_mode,storage_tech_list,"avg",True,"batch","storage")   
+    PlotRelationShip(cars_no_batch_mode, storage_std_batch_mode,storage_tech_list,"std",True,"batch","storage")   
+    
+    PlotRelationShip(cars_no_single_mode, storage_avg_time_single_mode,storage_tech_list,"avg",True,"single","storage")   
+    PlotRelationShip(cars_no_single_mode, storage_std_single_mode,storage_tech_list,"std",True,"single","storage") 
+             
+ 
+                 
+                
 
 def plotColChart(df_to_plot,operation,parent_path,no_of_cars,no_of_records,storage_mode):
 
@@ -56,8 +180,6 @@ def plotColChart(df_to_plot,operation,parent_path,no_of_cars,no_of_records,stora
     tech_nums = len(df_to_plot['tech'])
     
     file_path = parent_path + "/"
-
-    colors_names = ['green','blue','red', 'yellow', 'purple']
 
 
     # Width of each bar
@@ -100,15 +222,19 @@ def plotColChart(df_to_plot,operation,parent_path,no_of_cars,no_of_records,stora
     plt.title(title)
     plt.xticks(x + bar_width,df_to_plot['tech'])
     plt.legend()
+    plt.grid(True)
     
     #print(f"file path:{file_path}")
     plt.savefig(file_path)
+    
+    plt.close()
 
 def analyzeReports(parent_path,cars_no,storage_mode,reports_paths):
 
     data_to_plot = {}
     chart_name = 'col'
 
+    cars_no_str = str(cars_no)
     
     avg_values = {}
     std_values = {}
@@ -119,7 +245,7 @@ def analyzeReports(parent_path,cars_no,storage_mode,reports_paths):
     
     no_of_records = 0
     
-    excel_info = {}
+    global excel_info
 
     
     data_to_plot['tech'] = [] 
@@ -148,29 +274,43 @@ def analyzeReports(parent_path,cars_no,storage_mode,reports_paths):
         
         if tech_name_found:
             tech_name = report_path[tech_name_start_pos:tech_name_end_pos - 1]
-            excel_info[tech_name] = {}
-            excel_info[tech_name]["communication info"] = df['comm_latency_sec']
-            excel_info[tech_name]["storage info"] = df['write_latency_sec']
+            
+            if tech_name not in excel_info.keys():
+                excel_info[tech_name] = {}
+            
+            if cars_no_str not in excel_info[tech_name].keys():
+                excel_info[tech_name][cars_no_str] = {}
+            
+            if storage_mode not in excel_info[tech_name][cars_no_str].keys():
+                excel_info[tech_name][cars_no_str][storage_mode] = {}
+            
+            excel_info[tech_name][cars_no_str][storage_mode]["communication info"] = df['comm_latency_sec']
+            
+
+            excel_info[tech_name][cars_no_str][storage_mode]["storage info"] = df['write_latency_sec']
+            excel_info[tech_name][cars_no_str][storage_mode]["no of msgs"] = no_of_records
+            
                 
     for operation in operations:
         data_to_plot['tech'] = []
         data_to_plot[com_tech_title_name] = []
         data_to_plot[storage_tech_title_name] = []
         
-        for tech in excel_info.keys():
-            data_to_plot['tech'].append(tech)
-            
-            
-            comm_data_frame = excel_info[tech]["communication info"]
-            storage_data_frame = excel_info[tech]["storage info"]
-            
+        for tech in excel_info.keys():        
+            if tech in excel_info.keys():
+                if cars_no_str in excel_info[tech].keys():
+                    if storage_mode in excel_info[tech][cars_no_str].keys():
+                        data_to_plot['tech'].append(tech)
+                        comm_data_frame = excel_info[tech][cars_no_str][storage_mode]["communication info"]
+                        storage_data_frame = excel_info[tech][cars_no_str][storage_mode]["storage info"]
+
                 
-            if operation == 'avg':
-                data_to_plot[com_tech_title_name].append(comm_data_frame.mean())
-                data_to_plot[storage_tech_title_name].append(storage_data_frame.mean())
-            else:
-                data_to_plot[com_tech_title_name].append(comm_data_frame.std())
-                data_to_plot[storage_tech_title_name].append(storage_data_frame.std())
+                        if operation == 'avg':
+                            data_to_plot[com_tech_title_name].append(comm_data_frame.mean())
+                            data_to_plot[storage_tech_title_name].append(storage_data_frame.mean())
+                        else:
+                            data_to_plot[com_tech_title_name].append(comm_data_frame.std())
+                            data_to_plot[storage_tech_title_name].append(storage_data_frame.std())
         
         
         plotColChart(data_to_plot,operation,parent_path,cars_no,no_of_records,storage_mode)
@@ -185,10 +325,22 @@ def listFilesWithExtension(directory, extension):
     filtered_files = [file for file in files if file.endswith(extension)]
     return filtered_files
 
+def removeOldFigures(directory):
 
-def main():
+    old_figures = listFilesWithExtension(directory,".png")
+    for old_fig in old_figures:
+        os.remove(directory+"/" + old_fig)
+
+
+def plotSeparateFigures():
     if os.path.isdir(reports_dir_name):
-        cars_no_list = os.listdir(reports_path)
+        cars_no_list = [d for d in os.listdir(reports_path) if os.path.isdir(os.path.join(reports_path, d))]
+        
+        # Convert to list of integers using a list comprehension
+        cars_no_int_list = [int(x) for x in cars_no_list]
+        cars_no_int_list.sort()
+        cars_no_list = [str(x) for x in cars_no_int_list]
+    
         batched_reports_paths = []
         record_reports_paths = []
         for cars_no in cars_no_list:
@@ -210,8 +362,13 @@ def main():
                         batched_reports_paths.append(report_path)
                     else:
                         record_reports_paths.append(report_path)
-                        
-                analyzeReports(reports_names_path,cars_no,storage_mode,reports_paths) 
-                #print(reports_paths)
+
+                removeOldFigures(reports_names_path)        
+                analyzeReports(reports_names_path,cars_no,storage_mode,reports_paths)
+
+def main():
+    plotSeparateFigures()
+    PlotOverallFigures() 
+
 
 main()
