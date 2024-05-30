@@ -442,6 +442,11 @@ def createExcelFile(obd2_data_frame,server_tech,is_batch_insertion,db_batch_size
 
         os.makedirs(os.path.dirname(full_file_path), exist_ok=True)
         # Generate Excel report
+        
+        obd2_data_frame['tx_time'] = obd2_data_frame['tx_time'].dt.strftime('%Y-%m-%d %H:%M:%S.%f')
+        obd2_data_frame['rx_time'] = obd2_data_frame['rx_time'].dt.strftime('%Y-%m-%d %H:%M:%S.%f')
+        obd2_data_frame['storage_time'] = obd2_data_frame['storage_time'].dt.strftime('%Y-%m-%d %H:%M:%S.%f')
+        
         obd2_data_frame.to_excel(full_file_path, index=False)
         print("Excel file has been created.")
     
