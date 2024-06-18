@@ -128,6 +128,24 @@ def increaseMsgCount(client_name):
     else:
         print("Invalid client name.")
         exit(1)
+        
+def setMsgCount(client_name,msg_count):
+    global kafka_sent_msg_count
+    global mqtt_sent_msg_count
+    global qpid_sent_msg_count
+    global ws_sent_msg_count
+
+    if client_name == "kafka":
+        kafka_sent_msg_count = msg_count
+    elif client_name == "mqtt":
+        mqtt_sent_msg_count = msg_count
+    elif client_name == "qpid":
+        qpid_sent_msg_count = msg_count
+    elif client_name == "ws":
+        ws_sent_msg_count = msg_count
+    else:
+        print("Invalid client name.")
+        exit(1)
     
 def getMsgCount(client_name):
     global kafka_sent_msg_count

@@ -4,7 +4,7 @@ import websockets
 import multiprocessing
 import aiopg
 import pandas as pd
-from datetime import datetime
+from datetime import datetime,timezone
 import time
 from concurrent.futures import ThreadPoolExecutor
 import psycopg2
@@ -22,6 +22,11 @@ db_batch_size = 100
 
 websocket_port = 8765
 
+
+def stringToFloatTimestamp(timestamp_str, format='%Y-%m-%d %H:%M:%S.%f'):
+    dt = datetime.strptime(timestamp_str, format)
+    float_timestamp = dt.replace(tzinfo=timezone.utc).timestamp()
+    return float_timestamp
 
 def getcurrentTimestamp():
     now = datetime.now()
@@ -43,68 +48,48 @@ def closeDatabaseConnection(cursor,conn):
 
 
 
-async def websocketServerHandler(websocket, path, queue,no_of_received_msgs_obj):
-    try:
-        while True:
-            message = await websocket.recv()
-                 
-            queue.put(message)
-            with no_of_received_msgs_obj.get_lock():
-                no_of_received_msgs_obj.value += 1
-                    
-    except websockets.ConnectionClosed:
-        print("WebSocket connection closed.")
-    except asyncio.TimeoutError:
-        print("Timeout, sent STOP signal to db_writer.")
-    finally:
-        queue.put("STOP")
-        await websocket.close()
 
-
-def preprocessData(data,use_database_timestamp):
+def preprocessData(data,use_database_timestamp,current_timestamp):
     
     record = ()
-    data = data[1:-1].split(',')
-    
-     # Strip double quotes from the timestamp field if present
-    tx_time_str = data[1].strip('"')
 
     if use_database_timestamp:
         record = (
                     data[0],                # vehicle_id
-                    tx_time_str,            # tx_time
-                    float(data[2]),         # x_pos
-                    float(data[3]),         # y_pos
-                    float(data[4]),         # gps_lon
-                    float(data[5]),         # gps_lat
-                    float(data[6]),         # speed
+                    data[1],            # tx_time
+                    data[2],         # x_pos
+                    data[3],         # y_pos
+                    data[4],         # gps_lon
+                    data[5],         # gps_lat
+                    data[6],         # speed
                     data[7],                # road_id
                     data[8],                # lane_id
-                    float(data[9]),         # displacement
-                    float(data[10]),        # turn_angle
-                    float(data[11]),        # acceleration
-                    float(data[12]),        # fuel_consumption
-                    float(data[13]),        # co2_consumption
-                    float(data[14]),        # deceleration
+                    data[9],         # displacement
+                    data[10],        # turn_angle
+                    data[11],        # acceleration
+                    data[12],        # fuel_consumption
+                    data[13],        # co2_consumption
+                    data[14],        # deceleration
+                    data[15]                # rx_time
                     )
     else:
-        current_timestamp = getcurrentTimestamp()
         record = (
                     data[0],                # vehicle_id
-                    tx_time_str,            # tx_time
-                    float(data[2]),         # x_pos
-                    float(data[3]),         # y_pos
-                    float(data[4]),         # gps_lon
-                    float(data[5]),         # gps_lat
-                    float(data[6]),         # speed
+                    data[1],            # tx_time
+                    data[2],         # x_pos
+                    data[3],         # y_pos
+                    data[4],         # gps_lon
+                    data[5],         # gps_lat
+                    data[6],         # speed
                     data[7],                # road_id
                     data[8],                # lane_id
-                    float(data[9]),         # displacement
-                    float(data[10]),        # turn_angle
-                    float(data[11]),        # acceleration
-                    float(data[12]),        # fuel_consumption
-                    float(data[13]),        # co2_consumption
-                    float(data[14]),        # deceleration
+                    data[9],         # displacement
+                    data[10],        # turn_angle
+                    data[11],        # acceleration
+                    data[12],        # fuel_consumption
+                    data[13],        # co2_consumption
+                    data[14],        # deceleration
+                    data[15],               # rx_time
                     current_timestamp       # storage_time
                 )
     
@@ -112,21 +97,53 @@ def preprocessData(data,use_database_timestamp):
 
     return record
 
-async def runWebsocketServer(queue,no_of_received_msgs_obj):
+async def websocketServerHandler(websocket, path, queue,no_of_received_msgs_obj,no_of_sent_msgs_obj,stop_event):
+    received_msg_count = 0
+    try:
+        
+        while True:
+            message = await websocket.recv()
+            current_timestamp = getcurrentTimestamp()
+            record = eval(message) 
+            if record[0] != "STOP":
+                record.append(current_timestamp)
+                queue.put(record)
+                received_msg_count += 1
+            else:
+                print("Received all messages")
+                with no_of_sent_msgs_obj.get_lock():
+                    no_of_sent_msgs_obj.value = record[1]
+                break
+            
+            
+                 
+    except websockets.ConnectionClosed:
+        print("WebSocket connection closed.")
+    except asyncio.TimeoutError:
+        print("Timeout, sent STOP signal to db_writer.")
+    finally:
+        queue.put("STOP")
+        
+        with no_of_received_msgs_obj.get_lock():
+                no_of_received_msgs_obj.value = received_msg_count
+        stop_event.set()
+        await websocket.close()
+
+
+async def runWebsocketServer(queue,no_of_received_msgs_obj,no_of_sent_msgs_obj):
     
-    server = await websockets.serve(lambda ws, path: websocketServerHandler(ws, path, queue,no_of_received_msgs_obj), "0.0.0.0", websocket_port)
+    stop_event = asyncio.Event()
+    server = await websockets.serve(lambda ws, path: websocketServerHandler(ws, path, queue,no_of_received_msgs_obj,no_of_sent_msgs_obj,stop_event), "0.0.0.0", websocket_port)
     print("Listening for incoming websocket connections...")
 
     try:
-        await asyncio.wait_for(asyncio.Future(), timeout=100)
-    except asyncio.TimeoutError:
-        print("Server timeout reached, shutting down.")
+        await stop_event.wait()  # Wait until stop_event is set
     finally:
         server.close()
         await server.wait_closed()
 
-def websocketServerProcess(queue,no_of_received_msgs_obj):
-    asyncio.run(runWebsocketServer(queue,no_of_received_msgs_obj))
+def websocketServerProcess(queue,no_of_received_msgs_obj,no_of_sent_msgs_obj):
+    asyncio.run(runWebsocketServer(queue,no_of_received_msgs_obj,no_of_sent_msgs_obj))
 
 
 
@@ -138,36 +155,37 @@ def getInsertionSqlQuery(use_database_timestamp):
         insertion_sql_query =f"""INSERT INTO {database_table} (
                             vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
                             lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
-                            co2_consumption, deceleration)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"""
+                            co2_consumption, deceleration,rx_time)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"""
     else:
         insertion_sql_query =f"""INSERT INTO {database_table} (
                             vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
                             lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
-                            co2_consumption, deceleration, storage_time) 
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"""
+                            co2_consumption, deceleration, rx_time, storage_time) 
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"""
     
     
     return insertion_sql_query
 
-def insertRecord(conn, record,no_of_inserted_msgs_obj,insert_query):
+def insertRecord(conn, record,insert_query):
 
     try:
         with conn.cursor() as cursor:
             cursor.execute(insert_query,record)
         conn.commit()
-        with no_of_inserted_msgs_obj.get_lock():
-            no_of_inserted_msgs_obj.value += 1
+
     except Exception as e:
         print(f"Failed to insert record {record} because of error {e}")
         conn.rollback()  
 
 
-def storeInDatabaseProcess(queue, no_of_inserted_msgs_obj,use_database_timestamp):
+def storeInDatabaseProcess(queue, last_storage_timestamp_obj,use_database_timestamp):
     
     conn,cursor = connectToDatabase()
 
     insert_query = getInsertionSqlQuery(use_database_timestamp)
+
+    last_storage_timestamp = "None"
 
     try:
         while True:
@@ -176,13 +194,17 @@ def storeInDatabaseProcess(queue, no_of_inserted_msgs_obj,use_database_timestamp
                 print("Stopping the database process...")
                 break
             
-            record = eval(data)
-
             if not use_database_timestamp:
-                current_time = getcurrentTimestamp()
-                record.append(current_time)
-            insertRecord(conn, record,no_of_inserted_msgs_obj,insert_query)
+                data.append(last_storage_timestamp)
+            insertRecord(conn,data,insert_query)
+            last_storage_timestamp = getcurrentTimestamp()
+
+            
+    except Exception as e:
+        print(f"Failed to insert record because of error {e}")
     finally:
+        with last_storage_timestamp_obj.get_lock():
+            last_storage_timestamp_obj.value = stringToFloatTimestamp(last_storage_timestamp)
         closeDatabaseConnection(conn,cursor)
 
 
@@ -195,8 +217,13 @@ def insertRecords(conn, records,insert_query):
         conn.rollback()
         print(f"Failed to insert batch: {e}")
 
-def storeInDatabaseBatchProcess(queue, no_of_inserted_msgs_obj,use_database_timestamp):
+def storeInDatabaseBatchProcess(queue, last_storage_timestamp_obj,use_database_timestamp):
 
+    
+
+    last_storage_timestamp = "None"
+
+    
     conn,cursor = connectToDatabase()
 
     # Turn autocommit off for batching
@@ -213,22 +240,19 @@ def storeInDatabaseBatchProcess(queue, no_of_inserted_msgs_obj,use_database_time
             if data == "STOP":
                 if len(records_to_insert) > 0:
                     insertRecords(conn, records_to_insert,insert_query)
-                    with no_of_inserted_msgs_obj.get_lock():
-                        no_of_inserted_msgs_obj.value += len(records_to_insert)
+                    last_storage_timestamp = getcurrentTimestamp()
                 break
             else:
-                
-                records_to_insert.append(preprocessData(data,use_database_timestamp))
+                records_to_insert.append(preprocessData(data,use_database_timestamp,last_storage_timestamp))
             
-                if len(records_to_insert) >= db_batch_size:  # Adjust batch size as appropriate
+                if len(records_to_insert) >= db_batch_size:
                     insertRecords(conn, records_to_insert,insert_query)
-                    with no_of_inserted_msgs_obj.get_lock():
-                        no_of_inserted_msgs_obj.value += db_batch_size
+                    last_storage_timestamp = getcurrentTimestamp()
                     records_to_insert = []
 
-            
-
     finally:
+        with last_storage_timestamp_obj.get_lock():
+            last_storage_timestamp_obj.value = stringToFloatTimestamp(last_storage_timestamp)
         closeDatabaseConnection(conn,cursor)
 
 
@@ -241,20 +265,17 @@ def extractFromDatabase(use_database_timestamp):
     query = f"""
             SELECT vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
             lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
-            co2_consumption, deceleration, storage_time 
+            co2_consumption, deceleration,rx_time, storage_time 
             FROM {database_table};
             """
 
     # Execute the query and fetch all data
     df = pd.read_sql_query(query, conn)
-
-    df.columns = ['VehicleId', 'tx_time', 'x_pos', 'y_pos', 'gps_lon', 'gps_lat',
-                  'Speed', 'RoadID', 'LaneId', 'Displacement', 'TurnAngle', 'Acceleration',
-                  'FuelConsumption', 'Co2Consumption', 'Deceleration', 'storage_time']
-
+    
+    # Close the database connection
     closeDatabaseConnection(conn,cursor)
     
-    return df
+    return df,db_batch_size
 
 
 

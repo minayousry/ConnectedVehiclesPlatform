@@ -14,7 +14,9 @@ new_username = 'guest'
 
 def createTable(cursor,use_database_timestamp):
 
-    sql_creation_query = f"""
+    if use_database_timestamp:
+        
+        sql_creation_query = f"""
                             CREATE TABLE IF NOT EXISTS {table_name} (
                             id SERIAL PRIMARY KEY,
                             vehicle_id TEXT,
@@ -32,11 +34,33 @@ def createTable(cursor,use_database_timestamp):
                             fuel_consumption DOUBLE PRECISION,
                             co2_consumption DOUBLE PRECISION,
                             deceleration DOUBLE PRECISION,
+                            rx_time TIMESTAMP WITHOUT TIME ZONE,
                             storage_time TIMESTAMP WITHOUT TIME ZONE """
                             
-    if use_database_timestamp:
         sql_creation_query += "DEFAULT CURRENT_TIMESTAMP"
         
+    else:
+        sql_creation_query = f"""
+                            CREATE TABLE IF NOT EXISTS {table_name} (
+                            id SERIAL PRIMARY KEY,
+                            vehicle_id TEXT,
+                            tx_time TEXT,
+                            x_pos DOUBLE PRECISION,
+                            y_pos DOUBLE PRECISION,
+                            gps_lon DOUBLE PRECISION,
+                            gps_lat DOUBLE PRECISION,
+                            speed DOUBLE PRECISION,
+                            road_id TEXT,
+                            lane_id TEXT,
+                            displacement DOUBLE PRECISION,
+                            turn_angle DOUBLE PRECISION,
+                            acceleration DOUBLE PRECISION,
+                            fuel_consumption DOUBLE PRECISION,
+                            co2_consumption DOUBLE PRECISION,
+                            deceleration DOUBLE PRECISION,
+                            rx_time TEXT,
+                            storage_time TEXT """
+                            
     sql_creation_query += ");"
     
     cursor.execute(sql_creation_query)
@@ -58,6 +82,23 @@ def clearTable(conn,cursor):
         
     except Exception as e:
         print(f"An error occurred: {e}")
+
+def dropTableIfExists(conn,cursor):
+    try:
+        drop_statement = f"DROP TABLE IF EXISTS {table_name};"
+        
+        # Execute the DROP TABLE statement
+        cursor.execute(drop_statement)
+        
+        # Commit the transaction
+        conn.commit()
+        
+        print(f"Table {table_name} dropped successfully (if it existed).")
+    except Exception as e:
+        print(f"An error occurred while dropping the table: {e}")
+        
+        
+
         
 def createDatabase(use_database_timestamp):
     
@@ -90,9 +131,10 @@ def createDatabase(use_database_timestamp):
         connection = psycopg2.connect(host=server_address, port=port, user=username, password=password,dbname=database_name)
         cursor = connection.cursor()
         
-        if database_exist:    
-            createTable(cursor,use_database_timestamp)
-            clearTable(connection,cursor)
+        
+        dropTableIfExists(connection,cursor)     
+        createTable(cursor,use_database_timestamp)
+        clearTable(connection,cursor)
         
         # Commit the transaction
         connection.commit()

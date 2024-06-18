@@ -18,6 +18,8 @@ async def wsSendData(websocket,message):
     await websocket.send(json_data)
 
 async def runScenario(sumo_cmd,ws_server):
+    
+    sent_msg_count = 0
     uri = f"ws://{ws_server}"
     
     async with websockets.connect(uri) as websocket:
@@ -50,7 +52,9 @@ async def runScenario(sumo_cmd,ws_server):
                         fuel_cons,co2_cons,dece]
                                     
                 await wsSendData(websocket,veh_data)
+                sent_msg_count += 1
                 cl_utl.increaseMsgCount("ws")
+        await wsSendData(websocket,["STOP",sent_msg_count])
         traci.close()
     
 

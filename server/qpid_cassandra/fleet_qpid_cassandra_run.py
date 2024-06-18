@@ -6,14 +6,16 @@ from proton import Message
 from proton import Event
 import time
 from uuid import uuid4
-from datetime import datetime
+from datetime import datetime, timezone
 import pandas as pd
-
+from cassandra.policies import DCAwareRoundRobinPolicy
 import sys
 import os
+import logging
+from cassandra.query import SimpleStatement
 
 received_msg_count = 0
-inserted_msg_count = 0
+
 
 
 #Qpid configurations
@@ -29,78 +31,103 @@ server_address = '127.0.0.1'
 db_batch_size = 100
 
 
+def stringToFloatTimestamp(timestamp_str, format='%Y-%m-%d %H:%M:%S.%f'):
+    dt = datetime.strptime(timestamp_str, format)
+    float_timestamp = dt.replace(tzinfo=timezone.utc).timestamp()
+    return float_timestamp
+
+def getcurrentTimestamp():
+    now = datetime.now()
+    formatted_date_time = now.strftime("%Y-%m-%d %H:%M:%S.%f")
+    return formatted_date_time         
+
 
 class Receiver(MessagingHandler):
-    
-    def __init__(self, url,queue,no_of_received_msgs):
+    def __init__(self, url, queue, no_of_received_msgs, no_of_sent_msgs):
         super(Receiver, self).__init__()
         self.url = url
-        self.senders = {}
         self.queue = queue
-        self.container = None 
         self.no_of_received_msgs = no_of_received_msgs
-        
-    def on_connection_closed(self, event):
-        global received_msg_count
-        print("Connection is closed")
-        #end the connection
-        self.queue.put("STOP")
-        
-        with self.no_of_received_msgs.get_lock():
-            self.no_of_received_msgs.value = received_msg_count
-        
-        if self.container:
-            self.container.stop()
-        
+        self.no_of_sent_msgs = no_of_sent_msgs
+        self.received_msg_count = 0
+        self.container = None
 
     def on_start(self, event):
-        print("Listening on", self.url)
+        print(f"Connecting to {self.url}")
         self.container = event.container
         self.acceptor = event.container.listen(self.url)
-    
-    def on_link_closed(self, event: Event):
-        print("link is closed")
-        self.container.stop()
+        print(f"Listening on {self.url}")
+
+    def on_connection_opened(self, event):
+        print("Connection opened")
+
+    def on_connection_closed(self, event):
+        print("Connection closed")
+        self.queue.put("STOP")
+        with self.no_of_received_msgs.get_lock():
+            self.no_of_received_msgs.value = self.received_msg_count
+        if self.container:
+            self.container.stop()
 
     def on_message(self, event):
-        global received_msg_count
-        
         try:
-            message = event.message
-            self.queue.put(message.body)
-            # Acknowledge the message to the broker
-            event.receiver.advance()
-            received_msg_count += 1
-        except Exception as e:
-            print(type(message))
-            print(f"Error processing message: {message.body}:{e}")
             
-        
+            message = event.message.body
+            current_timestamp = getcurrentTimestamp()
+            #print(f"Received message: {message}")
+            if message[0] != "STOP":
+                message.append(current_timestamp)
+                self.queue.put(message)
+                event.receiver.flow(1)
+                self.received_msg_count += 1
+            else:
+                print("Received all messages")
+                with self.no_of_sent_msgs.get_lock():
+                    self.no_of_sent_msgs.value = message[1]
+                self.queue.put("STOP")
+                self.container.stop()
+        except Exception as e:
+            print(f"Error processing message: {message if message else 'None'}: {e}")
 
-        
-    def on_timer_task(self, event):
-        if not self.messages_received:
-            print("No messages received yet.")
+    def on_disconnected(self, event):
+        print("Disconnected")
+        if self.container:
+            self.container.stop()
 
-def receiverProcess(queue, no_of_received_msgs):
-    handler = Receiver(server_url, queue,no_of_received_msgs)
-    container = Container(handler) 
+
+def receiverProcess(data_queue, no_of_received_msgs_obj, no_of_sent_msgs_obj):
+
+    server_url = "amqp://0.0.0.0:8888/obd2_data_queue"
+    handler = Receiver(server_url, data_queue, no_of_received_msgs_obj, no_of_sent_msgs_obj)
+    container = Container(handler)
     container.run()
+
+
+def getCluster():
+    cluster = Cluster(
+            contact_points=['localhost'],
+            load_balancing_policy=DCAwareRoundRobinPolicy(local_dc='datacenter1'),
+            protocol_version=5
+        )
+    return cluster
     
+
     
-def databaseProcess(queue,no_of_inserted_msgs,use_database_timestamp):
+#logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     
-    global inserted_msg_count
+def databaseProcess(queue,last_storage_timestamp_obj,use_database_timestamp):
+    
+    last_storage_timestamp = "NONE"
     
     # Parameterized query for security
     insert_query = f"INSERT INTO {keyspace_name}.{table_name} (id, vehicle_id,tx_time,x_pos,y_pos, \
                                                                 gps_lon, gps_lat, speed,road_id,lane_id, \
                                                                 displacement, turn_angle, acceleration, fuel_consumption,co2_consumption, \
-                                                                deceleration,storage_time \
-                                                                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+                                                                deceleration, rx_time, storage_time \
+                                                                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
     
     try:
-        cluster = Cluster(['localhost'])
+        cluster = cluster = getCluster()
         session = cluster.connect(keyspace_name)
 
         while True:
@@ -113,48 +140,58 @@ def databaseProcess(queue,no_of_inserted_msgs,use_database_timestamp):
             
             
             
-            timestamp  = datetime.now()                                                 
+                                                            
             
             session.execute(insert_query,( uuid4(), message[0],message[1],message[2],message[3] \
                                             ,message[4],message[5],message[6],message[7],message[8] \
                                             ,message[9],message[10],message[11],message[12],message[13] \
-                                            ,message[14],timestamp
+                                            ,message[14], message[15], last_storage_timestamp
                                         ) )
-            inserted_msg_count += 1
+            last_storage_timestamp  = getcurrentTimestamp() 
             
             
             
     except Exception as e:
         print(f"Error during database operation for {message}: {e}")
     finally:
-        with no_of_inserted_msgs.get_lock():
-                no_of_inserted_msgs.value = inserted_msg_count
-        cluster.shutdown()
+        with last_storage_timestamp_obj.get_lock():
+            last_storage_timestamp_obj.value = stringToFloatTimestamp(last_storage_timestamp)
+        if 'session' in locals():
+            print("closing session")
+            session.shutdown()
+        if 'cluster' in locals():
+            print("closing cluster")
+            cluster.shutdown()
         
 
-def insertBatch(session, batch,insert_query):
+def insertBatch(session, batch,insert_query,storage_time):
 
-
-    timestamp = datetime.now()
 
     for message in batch:
         session.execute(insert_query, (uuid4(), message[0], message[1], message[2], message[3], \
                                         message[4], message[5], message[6], message[7], message[8], \
                                         message[9], message[10], message[11], message[12], message[13], \
-                                        message[14], timestamp))      
+                                        message[14],message[15], storage_time))      
 
-def databaseBatchProcess(queue,no_of_inserted_msgs,use_database_timestamp):
+def databaseBatchProcess(queue,last_storage_timestamp_obj,use_database_timestamp):
     
-    global inserted_msg_count
+
+    last_storage_timestamp = "None"
+
+    
+    # Parameterized query for security
+    
+
+
     
     insert_query = f"INSERT INTO {table_name} (id, vehicle_id, tx_time, x_pos, y_pos, \
                                                gps_lon, gps_lat, speed, road_id, lane_id, \
                                                displacement, turn_angle, acceleration, fuel_consumption, co2_consumption, \
-                                               deceleration, storage_time) \
-                                               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+                                               deceleration, rx_time, storage_time) \
+                                               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
     
     try:
-        cluster = Cluster(['localhost'])
+        cluster = getCluster()
         session = cluster.connect(keyspace_name)
 
         batch_count = 0
@@ -172,58 +209,71 @@ def databaseBatchProcess(queue,no_of_inserted_msgs,use_database_timestamp):
 
             # Check if batch size is reached
             if len(batch) >= db_batch_size:
-                insertBatch(session, batch,insert_query)
+                insertBatch(session, batch,insert_query,last_storage_timestamp)
+                last_storage_timestamp = getcurrentTimestamp()
                 batch_count += 1
-                inserted_msg_count += db_batch_size
                 batch = []
 
         # Insert remaining records if any
         if len(batch) > 0:
-            insertBatch(session,batch,insert_query)
-            inserted_msg_count += len(batch)
+            insertBatch(session,batch,insert_query,last_storage_timestamp)
+            last_storage_timestamp = getcurrentTimestamp()
             batch_count += 1
 
     except Exception as e:
         print(f"Error during database operation: {e}")
     finally:
-        with no_of_inserted_msgs.get_lock():
-                no_of_inserted_msgs.value = inserted_msg_count
-        cluster.shutdown()
+        with last_storage_timestamp_obj.get_lock():
+            last_storage_timestamp_obj.value = stringToFloatTimestamp(last_storage_timestamp)
+        if 'session' in locals():
+            print("closing session")
+            session.shutdown()
+        if 'cluster' in locals():
+            print("closing cluster")
+            cluster.shutdown()
 
-  
+
 def extractFromDatabase(use_database_timestamp):
-    
     result = None
     cluster = None
     session = None
     
     try:
-        cluster = Cluster(['localhost'])
+        cluster = getCluster()
         session = cluster.connect(keyspace_name)
         
-
         select_query = f"""SELECT vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
                             lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
-                            co2_consumption, deceleration, storage_time 
+                            co2_consumption, deceleration, rx_time, storage_time 
                             FROM {keyspace_name}.{table_name}"""
-                        
 
-        # Execute query and fetch data
-        rows = session.execute(select_query)
+        statement = SimpleStatement(select_query, fetch_size=1000)
+        rows = session.execute(statement)
+        all_rows = []
 
-        result = pd.DataFrame(rows.current_rows)
+        for row in rows:
+            all_rows.append(row)
+
+        while rows.has_more_pages:
+            rows = session.execute(statement, paging_state=rows.paging_state)
+            for row in rows:
+                all_rows.append(row)
+
+        result = pd.DataFrame(all_rows)
         
+        logging.info("Succeeded to extract info from database.")
+        logging.info(f"Number of records extracted: {len(result)}")
 
-        print("succeded to extract info from database.")
-    
     except Exception as e:
-        print(f"Failed to extract information from the database: {e}")
+        logging.error(f"Failed to extract information from the database: {e}")
     
     finally:
-        session.shutdown()
-        cluster.shutdown()
-    
-    return result
+        if session:
+            session.shutdown()
+        if cluster:
+            cluster.shutdown()
+
+    return result,db_batch_size
 
 
 

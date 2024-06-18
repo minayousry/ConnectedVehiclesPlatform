@@ -6,11 +6,11 @@ import pandas as pd
 import multiprocessing
 from psycopg2 import sql
 import psycopg2.extras
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 # Configuration for connecting to your Kafka server
-kafka_server = '127.0.0.1:9092'  # this to the Kafka server address
+kafka_server = '127.0.0.1:9092'
 topic_name = 'OBD2_data'
 consumer_timeout_in_ms = 20000
 received_msgs = []
@@ -20,11 +20,18 @@ time_diff_list = []
 user = 'mina_yousry_iti'
 password = 'my_psw'
 host = 'localhost'
-port = '5432'  # Default port for Greenplum and PostgreSQL
+port = '5432' 
 default_dbname = "postgres"
 dbname = "OBD2_Data_Fleet_database"
 table_name = "OBD2_table"
 db_batch_size = 100
+
+
+
+def stringToFloatTimestamp(timestamp_str, format='%Y-%m-%d %H:%M:%S.%f'):
+    dt = datetime.strptime(timestamp_str, format)
+    float_timestamp = dt.replace(tzinfo=timezone.utc).timestamp()
+    return float_timestamp
 
 def getcurrentTimestamp():
     now = datetime.now()
@@ -37,19 +44,24 @@ def getInsertionSqlQuery(use_database_timestamp):
         insertion_sql_query =f"""INSERT INTO {table_name} (
                             vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
                             lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
-                            co2_consumption, deceleration) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"""
+                            co2_consumption, deceleration, rx_time) 
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"""
     else:
         insertion_sql_query =f"""INSERT INTO {table_name} (
                             vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
                             lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
-                            co2_consumption, deceleration, storage_time) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"""
+                            co2_consumption, deceleration, rx_time, storage_time) 
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"""
     
     
     return insertion_sql_query
     
     
 
-def kafkaConsumerProcess(queue,no_of_received_msgs_obj):
+def kafkaConsumerProcess(queue,no_of_received_msgs_obj,no_of_sent_msgs_obj):
+    
+    sent_msg_count = 0
+    received_msg_count = 0
     
     exit_code = 0
     consumer = None
@@ -65,22 +77,27 @@ def kafkaConsumerProcess(queue,no_of_received_msgs_obj):
         print('Listening for messages on topic '+ topic_name + '....')
         
         for message in consumer:
+            cuurent_timestamp = getcurrentTimestamp()
+            
             received_msg = message.value
             if received_msg[0] == "STOP":
                 print("Received STOP message")
+                sent_msg_count = received_msg[1]
                 queue.put("STOP")
                 break
-
+            received_msg.append(cuurent_timestamp)
             queue.put(received_msg)
-            with no_of_received_msgs_obj.get_lock():
-                no_of_received_msgs_obj.value += 1
+            received_msg_count += 1
             
-                
-            
+  
     except Exception as e:
         print(f"Kafka consumer error: {e}")
         exit_code = 1
     finally:
+        with no_of_sent_msgs_obj.get_lock():
+            no_of_sent_msgs_obj.value = sent_msg_count
+        with no_of_received_msgs_obj.get_lock():
+            no_of_received_msgs_obj.value = received_msg_count
         
         if consumer is not None:
             consumer.commit()
@@ -96,21 +113,21 @@ def connectToDatabase():
 
     return conn,cursor
     
-def insertRecord(conn, record,no_of_inserted_msgs_obj,insert_sql_query):
+def insertRecord(conn, record,insert_sql_query):
     cursor = conn.cursor()
     try:
         cursor.execute(insert_sql_query,record)
         conn.commit()
-        with no_of_inserted_msgs_obj.get_lock():
-            no_of_inserted_msgs_obj.value += 1
     except Exception as e:
         conn.rollback()
-        print(f"Failed to insert record: {e}")
+        print(f"Failed to insert record {record}: {e}")
 
-def storeInDatabaseProcess(queue,no_of_inserted_msgs_obj,use_database_timestamp):
+def storeInDatabaseProcess(queue,last_storage_timestamp_obj,use_database_timestamp):
     conn = None
     exit_code = 0
-
+    inserted_msg_count = 0
+    
+    last_storage_timestamp = "NONE"
     try:
         conn,cursor = connectToDatabase()
         insert_sql_query = getInsertionSqlQuery(use_database_timestamp)
@@ -119,13 +136,18 @@ def storeInDatabaseProcess(queue,no_of_inserted_msgs_obj,use_database_timestamp)
             if data == "STOP":
                 break
             if not use_database_timestamp:
-                current_timestamp = getcurrentTimestamp()
-                data.append(current_timestamp)
-            insertRecord(conn, data, no_of_inserted_msgs_obj,insert_sql_query)
+                data.append(last_storage_timestamp)
+                
+            insertRecord(conn, data,insert_sql_query)
+            last_storage_timestamp = getcurrentTimestamp()
+            inserted_msg_count += 1
+            
     except Exception as e:
         print(f"An error occurred while inserting data into Database: {e}")
         exit_code = 1
     finally:
+        with last_storage_timestamp_obj.get_lock():
+            last_storage_timestamp_obj.value = stringToFloatTimestamp(last_storage_timestamp)
         closeDatabaseConnection(conn,cursor)
     
     exit(exit_code)
@@ -143,19 +165,19 @@ def extractFromDatabase(use_database_timestamp):
     query = f"""
             SELECT vehicle_id, tx_time, x_pos, y_pos, gps_lon, gps_lat, speed, road_id, 
             lane_id, displacement, turn_angle, acceleration, fuel_consumption, 
-            co2_consumption, deceleration, storage_time FROM {table_name};
+            co2_consumption, deceleration, rx_time, storage_time FROM {table_name};
             """
 
     # Execute the query and fetch all data
     df = pd.read_sql_query(query, conn)
 
-    df.columns = ['VehicleId', 'tx_time', 'x_pos', 'y_pos', 'gps_lon', 'gps_lat',
+    df.columns = ['vehicle_id', 'tx_time', 'x_pos', 'y_pos', 'gps_lon', 'gps_lat',
                   'Speed', 'RoadID', 'LaneId', 'Displacement', 'TurnAngle', 'Acceleration',
-                  'FuelConsumption', 'Co2Consumption', 'Deceleration', 'storage_time']
+                  'FuelConsumption', 'Co2Consumption', 'Deceleration','rx_time', 'storage_time']
 
     closeDatabaseConnection(conn,cursor)
     
-    return df
+    return df,db_batch_size
 
 
 
@@ -169,7 +191,12 @@ def insertRecords(conn, records,insert_sql_query):
         print(f"Failed to insert batch: {e}")
 
 
-def storeInDatabaseBatchProcess(queue,no_of_inserted_msgs_obj,use_database_timestamp):
+def storeInDatabaseBatchProcess(queue,last_storage_timestamp_obj,use_database_timestamp):
+    
+    
+    inserted_msg_count = 0
+    
+    last_storage_timestamp = "NONE"
     
     exit_code = 0
 
@@ -190,20 +217,20 @@ def storeInDatabaseBatchProcess(queue,no_of_inserted_msgs_obj,use_database_times
             if data == "STOP":
                 if len(records_to_insert) > 0:
                     insertRecords(conn, records_to_insert,insert_sql_query)
-                    with no_of_inserted_msgs_obj.get_lock():
-                        no_of_inserted_msgs_obj.value += len(records_to_insert)
+                    last_storage_timestamp = getcurrentTimestamp()
+                    inserted_msg_count += len(records_to_insert)
                 
                 break
             else:
                 if not use_database_timestamp:
-                    current_timestamp = getcurrentTimestamp()
-                    data.append(current_timestamp)
+                    data.append(last_storage_timestamp)
+                    
                 
                 records_to_insert.append(tuple(data))
-                if len(records_to_insert) >= db_batch_size:  # Adjust batch size as appropriate
+                if len(records_to_insert) >= db_batch_size:
                     insertRecords(conn, records_to_insert,insert_sql_query)
-                    with no_of_inserted_msgs_obj.get_lock():
-                        no_of_inserted_msgs_obj.value += db_batch_size
+                    last_storage_timestamp = getcurrentTimestamp()
+                    inserted_msg_count += db_batch_size
                     records_to_insert = []
                     
     except Exception as e:
@@ -211,6 +238,8 @@ def storeInDatabaseBatchProcess(queue,no_of_inserted_msgs_obj,use_database_times
         exit_code = 1
 
     finally:
+        with last_storage_timestamp_obj.get_lock():
+            last_storage_timestamp_obj.value = stringToFloatTimestamp(last_storage_timestamp)
         closeDatabaseConnection(conn,cursor)
     
     exit(exit_code)

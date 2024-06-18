@@ -12,6 +12,7 @@ topic_name = 'OBD2_data'
 
 def runScenario(sumo_cmd,producer):
     
+    sent_msg_count = 0
     try:    
         traci.start(sumo_cmd)
         while traci.simulation.getMinExpectedNumber() > 0:
@@ -43,8 +44,9 @@ def runScenario(sumo_cmd,producer):
                             fuel_cons,co2_cons,dece]
                      
                 producer.send(topic_name, value=veh_data)
+                sent_msg_count += 1
                 cl_utl.increaseMsgCount("kafka")            
-        producer.send(topic_name, value=["STOP"])
+        producer.send(topic_name, value=["STOP",sent_msg_count])
         traci.close()
         
     except Exception as e:

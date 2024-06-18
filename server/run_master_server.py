@@ -7,32 +7,48 @@ import mqtt_Influx.fleet_mqtt_influx_run as mqtt_influx
 import qpid_cassandra.fleet_qpid_cassandra_run as qpid_cassandra
 import webSockets_Postgresql.fleet_ws_postpresql_run as websocket_postgresql
 import webSockets_Redis.fleet_ws_redis_run as websocket_redis
+import ctypes
 
 #import utilities
 import server_utilities as server_utilities
 
 import configurations as cfg
 
+from datetime import datetime,timezone
 
-def runProcesses(comm_process, database_process):
+
+
+def floatToStringTimestamp(last_storage_timestamp_obj, format='%Y-%m-%d %H:%M:%S.%f'):
+    float_timestamp = 0
+    with last_storage_timestamp_obj.get_lock():
+        float_timestamp = last_storage_timestamp_obj.value
+        
+    dt = datetime.fromtimestamp(float_timestamp, tz=timezone.utc)
+    timestamp_str = dt.strftime(format)
+    return timestamp_str
+
+def runProcesses(server_tech,comm_process, database_process):
     
     result = False
 
     no_of_received_msgs_obj = multiprocessing.Value('i', 0)
-    no_of_inserted_msgs_obj = multiprocessing.Value('i', 0)
+    no_of_sent_msgs_obj = multiprocessing.Value('i', 0)
+    last_storage_timestamp_obj = multiprocessing.Value('d', 0.0)
     
     total_size_bytes = 9900000
+    if server_tech == "mqtt_influx":
+        total_size_bytes = 0
     
     try:
         # Create a multiprocessing Queue for IPC
         data_queue = multiprocessing.Queue(maxsize=total_size_bytes)
             
         # Create and start the communication process
-        comm_proc = multiprocessing.Process(target=comm_process, args=(data_queue,no_of_received_msgs_obj))
+        comm_proc = multiprocessing.Process(target=comm_process, args=(data_queue,no_of_received_msgs_obj,no_of_sent_msgs_obj))
         comm_proc.start()
         
         # Create and start the database process
-        db_proc = multiprocessing.Process(target=database_process, args=(data_queue,no_of_inserted_msgs_obj,cfg.use_database_timestamp))
+        db_proc = multiprocessing.Process(target=database_process, args=(data_queue,last_storage_timestamp_obj,cfg.use_database_timestamp))
         db_proc.start()
         
         # Wait for both processes to finish
@@ -56,17 +72,21 @@ def runProcesses(comm_process, database_process):
         print(f"An error occurred: {e}")
         result = False
     finally:
-        return result,no_of_received_msgs_obj.value,no_of_inserted_msgs_obj.value
+        timestamp_str = floatToStringTimestamp(last_storage_timestamp_obj)
+        
+        return result,no_of_received_msgs_obj.value,no_of_sent_msgs_obj.value,timestamp_str
 
 
-def createReport(database_extract_func,generation_path,server_tech):
+
+
+def createReport(database_extract_func,server_tech,last_storage_timestamp):
     
     print("Extracting information from the database...")
-    extracted_df = database_extract_func(cfg.use_database_timestamp)
+    extracted_df,db_batch_size = database_extract_func(cfg.use_database_timestamp)
     
     if extracted_df is not None:
         print("Creating excel file...")
-        server_utilities.createExcelFile(extracted_df,generation_path,server_tech)
+        server_utilities.createExcelFile(extracted_df,server_tech,cfg.enable_database_batch_inserion,db_batch_size,last_storage_timestamp)
     
 
 
@@ -90,9 +110,8 @@ if __name__ == '__main__':
     database_process = None
     database_extract_func = None
     reporting_module = None
-    generation_path = "fleetManager/server/Kafka_GreenPlum/"
     
-    srever_techs = ["mqtt_influx", "kafka_greenplum", "qpid_cassandra", "websocket_postgresql", "websocket_redis"]
+    srever_techs = ["mqtt_influx", "kafka_greenplum", "qpid_cassandra", "websocket_postgresql", "websocket_redis","kafka_redis","qpid_redis","qpid_greenplum"]
     
     if server_tech not in srever_techs:
         print("Invalid server technology. Please select one of the following: mqtt_influx, kafka_greenplum, qpid_cassandra, websocket_postgresql or websocket_redis")
@@ -110,7 +129,7 @@ if __name__ == '__main__':
             database_process = kafka_gp.storeInDatabaseProcess
             
         database_extract_func = kafka_gp.extractFromDatabase
-        generation_path = "./Kafka_GreenPlum/"
+
         
     elif server_tech == "mqtt_influx":
         comm_process = mqtt_influx.mqttProcess
@@ -121,7 +140,6 @@ if __name__ == '__main__':
             database_process = mqtt_influx.influxProcess
             
         database_extract_func = mqtt_influx.extractFromDatabase
-        generation_path = "./mqtt_Influx/"
         
     elif server_tech == "qpid_cassandra":
         comm_process = qpid_cassandra.receiverProcess
@@ -132,7 +150,6 @@ if __name__ == '__main__':
             database_process = qpid_cassandra.databaseProcess
             
         database_extract_func = qpid_cassandra.extractFromDatabase
-        generation_path = "./qpid_cassandra/"
         
         
     elif server_tech == "websocket_postgresql":
@@ -144,7 +161,6 @@ if __name__ == '__main__':
             database_process = websocket_postgresql.storeInDatabaseProcess
             
         database_extract_func = websocket_postgresql.extractFromDatabase
-        generation_path = "./webSockets_Postgresql/"
         
         
     elif server_tech == "websocket_redis":
@@ -154,20 +170,47 @@ if __name__ == '__main__':
         else:
             database_process = websocket_redis.dbWriterProcess
         database_extract_func = websocket_redis.extractFromDatabase
-        generation_path = "./webSockets_Redis/"
+    
+    elif server_tech == "kafka_redis":
+        comm_process = kafka_gp.kafkaConsumerProcess
         
- 
+        if cfg.enable_database_batch_inserion:
+            database_process = websocket_redis.dbBatchWriterProcess
+        else:
+            database_process = websocket_redis.dbWriterProcess
+        database_extract_func = websocket_redis.extractFromDatabase
+        
+    elif server_tech == "qpid_redis":
+        comm_process = qpid_cassandra.receiverProcess
+        
+        if cfg.enable_database_batch_inserion:
+            database_process = websocket_redis.dbBatchWriterProcess
+        else:
+            database_process = websocket_redis.dbWriterProcess
+        database_extract_func = websocket_redis.extractFromDatabase
+        
+    elif server_tech == "qpid_greenplum":
+        comm_process = qpid_cassandra.receiverProcess
+        
+        
+        if cfg.enable_database_batch_inserion:
+            database_process = kafka_gp.storeInDatabaseBatchProcess
+        else:
+            database_process = kafka_gp.storeInDatabaseProcess
+            
+        database_extract_func = kafka_gp.extractFromDatabase
+        
     try:
         
-        result,no_of_received_msgs,no_of_inserted_records = runProcesses(comm_process, database_process)
-        
+        result,no_of_received_msgs,no_of_sent_msgs,last_storage_timestamp = runProcesses(server_tech,comm_process, database_process)
+
         if result:
             print("Processes have finished successfully.")
             server_utilities.recordEndreceptionStorageTime(server_tech)
             server_utilities.setReceivedMsgCount(server_tech,no_of_received_msgs)
-            server_utilities.setInsertedMsgCount(server_tech,no_of_inserted_records)
+            server_utilities.setSentMsgCount(server_tech,no_of_sent_msgs)
+            createReport(database_extract_func,server_tech,last_storage_timestamp)
             server_utilities.createProfilingReport(server_tech)
-            createReport(database_extract_func,generation_path,server_tech)
 
         else:
             print("Processes have terminated for some errors.")
