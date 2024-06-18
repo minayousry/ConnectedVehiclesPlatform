@@ -53,7 +53,7 @@ min_transaction_latency = 0
 
 no_of_cars = 0
 
-technologies = ["mqtt_influx", "kafka_greenplum", "qpid_cassandra", "websocket_postgresql", "websocket_redis"]
+technologies = ["mqtt_influx", "kafka_greenplum", "qpid_cassandra", "websocket_postgresql", "websocket_redis","kafka_redis","qpid_redis","qpid_greenplum"]
 
 
 def getdatetime():
@@ -62,25 +62,6 @@ def getdatetime():
     DATIME = currentDT.strftime("%Y-%m-%d %H:%M:%S.%f")
     return DATIME
 
-def resetMsgCount(technology):
-    global kafka_received_msg_count
-    global mqtt_received_msg_count
-    global qpid_received_msg_count
-    global ws_received_msg_count
-
-    if technology == "kafka_greenplum":
-        kafka_received_msg_count = 0
-    elif technology == "mqtt_influx":
-        mqtt_received_msg_count = 0
-    elif technology == "qpid_cassandra":
-        qpid_received_msg_count = 0
-    elif technology == "websocket_postgresql":
-        ws_received_msg_count = 0
-    elif technology == "websocket_redis":
-        ws_received_msg_count = 0
-    else:
-        print("Invalid client name.")
-        exit(1)
 
 def setReceivedMsgCount(technology, count):
     global kafka_received_msg_count
@@ -98,6 +79,12 @@ def setReceivedMsgCount(technology, count):
         ws_received_msg_count = count
     elif technology == "websocket_redis":
         ws_received_msg_count = count
+    elif technology == "kafka_redis":
+        kafka_received_msg_count = count
+    elif technology == "qpid_redis":
+        qpid_received_msg_count = count
+    elif technology == "qpid_greenplum":
+        qpid_received_msg_count = count
     else:
         print("setReceivedMsgCount:Unknown Technology")
         exit(1)
@@ -118,6 +105,12 @@ def setSentMsgCount(technology, count):
         ws_sent_msg_count = count
     elif technology == "websocket_redis":
         ws_sent_msg_count = count
+    elif technology == "kafka_redis":
+        kafka_sent_msg_count = count
+    elif technology == "qpid_redis":
+        qpid_sent_msg_count = count
+    elif technology == "qpid_greenplum":
+        qpid_sent_msg_count = count
     else:
         print("setSentMsgCount:Unknown Technology")
         exit(1)
@@ -140,6 +133,12 @@ def setInsertedMsgCount(technology, count):
         postgresql_inserted_msg_count = count
     elif technology == "websocket_redis":
         redis_inserted_msg_count = count
+    elif technology == "kafka_redis":
+        kafka_inserted_msg_count = count
+    elif technology == "qpid_redis":
+        qpid_inserted_msg_count = count
+    elif technology == "qpid_greenplum":
+        qpid_isnerted_msg_count = count
     else:
         print("setInsertedMsgCount:Unknown Technology")
         exit(1)
@@ -163,8 +162,14 @@ def recordStartreceptionStorageTime(technology):
         websocket_postgresql_start_reception_storage_time = getdatetime()
     elif technology == "websocket_redis":
         websocket_redis_start_reception_storage_time = getdatetime()
+    elif technology == "kafka_redis":
+        kafka_greenplum_start_reception_storage_time = getdatetime()
+    elif technology == "qpid_redis":
+        qpid_cassandra_start_reception_storage_time = getdatetime()
+    elif technology == "qpid_greenplum":
+        qpid_cassandra_start_reception_storage_time = getdatetime()
     else:
-        print("Invalid client name.")
+        print("Invalid client name in recordStartreceptionStorageTime.")
         exit(1)
 
 def recordEndreceptionStorageTime(technology):
@@ -184,8 +189,14 @@ def recordEndreceptionStorageTime(technology):
         websocket_postgresql_end_reception_storage_time = getdatetime()
     elif technology == "websocket_redis":
         websocket_redis_end_reception_storage_time = getdatetime()
+    elif technology == "kafka_redis":
+        kafka_greenplum_end_reception_storage_time = getdatetime()
+    elif technology == "qpid_redis":
+        qpid_cassandra_end_reception_storage_time = getdatetime()
+    elif technology == "qpid_greenplum":
+        qpid_cassandra_end_reception_storage_time = getdatetime()
     else:
-        print("Invalid client name.")
+        print("Invalid client name in recordEndreceptionStorageTime.")
         exit(1)
     
 def calculatereceptionStorageDuration(technology):
@@ -216,8 +227,17 @@ def calculatereceptionStorageDuration(technology):
     elif technology == "websocket_redis":
         start_time = websocket_redis_start_reception_storage_time
         end_time = websocket_redis_end_reception_storage_time
+    elif technology == "kafka_redis":
+        start_time = kafka_greenplum_start_reception_storage_time
+        end_time = kafka_greenplum_end_reception_storage_time
+    elif technology == "qpid_redis":
+        start_time = qpid_cassandra_start_reception_storage_time
+        end_time = qpid_cassandra_end_reception_storage_time
+    elif technology == "qpid_greenplum":
+        start_time = qpid_cassandra_start_reception_storage_time
+        end_time = qpid_cassandra_end_reception_storage_time
     else:
-        print("Invalid client name.")
+        print("Invalid client name in calculatereceptionStorageDuration.")
         exit(1)
     
     if start_time is None:
@@ -271,6 +291,19 @@ def createProfilingReport(technology):
             received_msg_count = ws_received_msg_count
             sent_msg_count = ws_sent_msg_count
             inserted_msg_count = redis_inserted_msg_count
+        elif technology == "kafka_redis":
+            received_msg_count = kafka_received_msg_count
+            sent_msg_count = kafka_sent_msg_count
+            inserted_msg_count = redis_inserted_msg_count
+        elif technology == "qpid_redis":
+            received_msg_count = qpid_received_msg_count
+            sent_msg_count = qpid_sent_msg_count
+            inserted_msg_count = redis_inserted_msg_count
+        elif technology == "qpid_greenplum":
+            received_msg_count = qpid_received_msg_count
+            sent_msg_count = qpid_sent_msg_count
+            inserted_msg_count = redis_inserted_msg_count
+            
     
     print("Communication Performance Report:")        
     print(f"No of sent messages: {sent_msg_count}")
@@ -320,7 +353,7 @@ def createExcelFile(obd2_data_frame,server_tech,is_batch_insertion,db_batch_size
     global no_of_cars
     global no_of_inserted_transactions
     
-    generation_path = "./reports/"
+    generation_path = "./reports/phase2/"
     
     no_of_inserted_transactions = len(obd2_data_frame)
     
@@ -389,15 +422,15 @@ def createExcelFile(obd2_data_frame,server_tech,is_batch_insertion,db_batch_size
             obd2_data_frame.iloc[-1, obd2_data_frame.columns.get_loc('storage_time')] = last_storage_timestamp
 
         
+        #drop the first row as the storage time is not accurate
+        obd2_data_frame.drop(obd2_data_frame.index[0], inplace=True)
+        
         if type(obd2_data_frame['storage_time'].iloc[0]) == str:
             print("Converting storage time to datetime")
             obd2_data_frame['storage_time'] = pd.to_datetime(obd2_data_frame['storage_time'], format='%Y-%m-%d %H:%M:%S.%f')
         
         
         print("Calculating time difference")
-        
-        #drop the first row as the storage time is not accurate
-        obd2_data_frame.drop(obd2_data_frame.index[0], inplace=True)
         
         
         comm_latency_sec = obd2_data_frame['rx_time'] - obd2_data_frame['tx_time']
@@ -418,7 +451,8 @@ def createExcelFile(obd2_data_frame,server_tech,is_batch_insertion,db_batch_size
         max_transaction_latency = obd2_data_frame['transaction_latency_sec'].max()
         min_transaction_latency = obd2_data_frame['transaction_latency_sec'].min()
 
-        no_of_cars = obd2_data_frame['vehicle_id'].nunique()
+        #no_of_cars = obd2_data_frame['vehicle_id'].nunique()
+        no_of_cars = no_of_inserted_transactions
 
         file_path = generation_path
         

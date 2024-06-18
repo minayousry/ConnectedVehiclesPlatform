@@ -111,7 +111,7 @@ if __name__ == '__main__':
     database_extract_func = None
     reporting_module = None
     
-    srever_techs = ["mqtt_influx", "kafka_greenplum", "qpid_cassandra", "websocket_postgresql", "websocket_redis"]
+    srever_techs = ["mqtt_influx", "kafka_greenplum", "qpid_cassandra", "websocket_postgresql", "websocket_redis","kafka_redis","qpid_redis","qpid_greenplum"]
     
     if server_tech not in srever_techs:
         print("Invalid server technology. Please select one of the following: mqtt_influx, kafka_greenplum, qpid_cassandra, websocket_postgresql or websocket_redis")
@@ -170,9 +170,36 @@ if __name__ == '__main__':
         else:
             database_process = websocket_redis.dbWriterProcess
         database_extract_func = websocket_redis.extractFromDatabase
-
+    
+    elif server_tech == "kafka_redis":
+        comm_process = kafka_gp.kafkaConsumerProcess
         
- 
+        if cfg.enable_database_batch_inserion:
+            database_process = websocket_redis.dbBatchWriterProcess
+        else:
+            database_process = websocket_redis.dbWriterProcess
+        database_extract_func = websocket_redis.extractFromDatabase
+        
+    elif server_tech == "qpid_redis":
+        comm_process = qpid_cassandra.receiverProcess
+        
+        if cfg.enable_database_batch_inserion:
+            database_process = websocket_redis.dbBatchWriterProcess
+        else:
+            database_process = websocket_redis.dbWriterProcess
+        database_extract_func = websocket_redis.extractFromDatabase
+        
+    elif server_tech == "qpid_greenplum":
+        comm_process = qpid_cassandra.receiverProcess
+        
+        
+        if cfg.enable_database_batch_inserion:
+            database_process = kafka_gp.storeInDatabaseBatchProcess
+        else:
+            database_process = kafka_gp.storeInDatabaseProcess
+            
+        database_extract_func = kafka_gp.extractFromDatabase
+        
     try:
         
         result,no_of_received_msgs,no_of_sent_msgs,last_storage_timestamp = runProcesses(server_tech,comm_process, database_process)

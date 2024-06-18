@@ -2,7 +2,7 @@ import os
 import pandas as pd
 
 # Define the directory name to check
-reports_dir_name = "reports/phase1"
+reports_dir_name = "reports/phase2"
 reports_path = './' + reports_dir_name
 
 import numpy as np
@@ -24,7 +24,7 @@ def filterOutNegativeValues(df, cols_to_filter):
     return df[mask]
     
 
-def PlotRelationShip(x, y,tech_list,operation,is_no_of_cars,storage_mode,tech_type,last_file_part_name,is_list_of_list = False):
+def PlotRelationShip(x, y,tech_list,operation,is_no_of_cars,storage_mode,last_file_part_name,is_list_of_list = False):
 
 
     
@@ -79,7 +79,13 @@ def extractTechAccordingToUsage(tech_list):
     
     for tech in tech_list:
         extracted_tech = tech.split("_")
-        comm_tech_list.append(extracted_tech[0])
+        if tech == "websocket_postgresql":
+            comm_tech_list.append(extracted_tech[0]+"_P")
+        elif tech == "websocket_redis": 
+            comm_tech_list.append(extracted_tech[0]+"_R")
+        else:
+            comm_tech_list.append(extracted_tech[0])
+            
         storage_tech_list.append(extracted_tech[1])
     
 
@@ -106,6 +112,12 @@ def PlotOverallFigures():
     storage_std_batch_mode = []
     storage_std_single_mode = []
     
+    total_avg_time_batch_mode = []
+    total_avg_time_single_mode = []
+    
+    total_std_time_batch_mode = []
+    total_std_time_single_mode = []
+    
     
     for tech in excel_info.keys():
         tech_list.append(tech)
@@ -129,6 +141,13 @@ def PlotOverallFigures():
         
         storage_std_per_batch = []
         storage_std_per_single = []
+        
+        total_avg_time_per_batch = []
+        total_avg_time_per_single = []
+        
+        total_std_time_per_batch = []
+        total_std_time_per_single = []
+        
 
         for msgs_no in list_of_msgs:
             
@@ -142,6 +161,10 @@ def PlotOverallFigures():
                     storage_avg_time_per_batch.append(excel_info[tech][msgs_no][storage_mode]["storage info"].mean())
                     storage_std_per_batch.append(excel_info[tech][msgs_no][storage_mode]["storage info"].std())
                     
+                    total_avg_time_per_batch.append(excel_info[tech][msgs_no][storage_mode]["total info"].mean())
+                    total_std_time_per_batch.append(excel_info[tech][msgs_no][storage_mode]["total info"].std())
+                    
+                    
                 else:
                     single_no_of_msgs.append(int(msgs_no))
                     
@@ -150,6 +173,9 @@ def PlotOverallFigures():
                     
                     storage_avg_time_per_single.append(excel_info[tech][msgs_no][storage_mode]["storage info"].mean())
                     storage_std_per_single.append(excel_info[tech][msgs_no][storage_mode]["storage info"].std())
+                    
+                    total_avg_time_per_single.append(excel_info[tech][msgs_no][storage_mode]["total info"].mean())
+                    total_std_time_per_single.append(excel_info[tech][msgs_no][storage_mode]["total info"].std())
         
         cars_msgs_batch_mode.append(batch_no_of_msgs)
         cars_msgs_single_mode.append(single_no_of_msgs)
@@ -165,37 +191,50 @@ def PlotOverallFigures():
     
         storage_std_batch_mode.append(storage_std_per_batch)
         storage_std_single_mode.append(storage_std_per_single)
+        
+        total_avg_time_batch_mode.append(total_avg_time_per_batch)
+        total_avg_time_single_mode.append(total_avg_time_per_single)
+        
+        total_std_time_batch_mode.append(total_std_time_per_batch)
+        total_std_time_single_mode.append(total_std_time_per_single)
     
         
     comm_tech_list,storage_tech_list = extractTechAccordingToUsage(tech_list)
         
  
-    PlotRelationShip(cars_msgs_batch_mode, comm_avg_time_batch_mode,comm_tech_list,"avg",False,"batch","communication","different comm technologies",True)   
-    PlotRelationShip(cars_msgs_batch_mode, comm_std_batch_mode,comm_tech_list,"std",False,"batch","communication","different comm technologies",True) 
+    PlotRelationShip(cars_msgs_batch_mode, comm_avg_time_batch_mode,comm_tech_list,"avg",False,"batch","different comm technologies",True)   
+    PlotRelationShip(cars_msgs_batch_mode, comm_std_batch_mode,comm_tech_list,"std",False,"batch","different comm technologies",True) 
     
-    PlotRelationShip(cars_msgs_single_mode, comm_avg_time_single_mode,comm_tech_list,"avg",False,"single","communication","different comm technologies",True)   
-    PlotRelationShip(cars_msgs_single_mode, comm_std_single_mode,comm_tech_list,"std",False,"single","communication","different comm technologies",True)   
+    PlotRelationShip(cars_msgs_single_mode, comm_avg_time_single_mode,comm_tech_list,"avg",False,"single","different comm technologies",True)   
+    PlotRelationShip(cars_msgs_single_mode, comm_std_single_mode,comm_tech_list,"std",False,"single","different comm technologies",True)   
     
-    PlotRelationShip(cars_msgs_batch_mode, storage_avg_time_batch_mode,storage_tech_list,"avg",False,"batch","storage","different storage technologies",True)   
-    PlotRelationShip(cars_msgs_batch_mode, storage_std_batch_mode,storage_tech_list,"std",False,"batch","storage","different storage technologies",True)   
+    PlotRelationShip(cars_msgs_batch_mode, storage_avg_time_batch_mode,storage_tech_list,"avg",False,"batch","different storage technologies",True)   
+    PlotRelationShip(cars_msgs_batch_mode, storage_std_batch_mode,storage_tech_list,"std",False,"batch","different storage technologies",True)   
     
-    PlotRelationShip(cars_msgs_single_mode, storage_avg_time_single_mode,storage_tech_list,"avg",False,"single","storage","different storage technologies",True)   
-    PlotRelationShip(cars_msgs_single_mode, storage_std_single_mode,storage_tech_list,"std",False,"single","storage","different storage technologies",True)
+    PlotRelationShip(cars_msgs_single_mode, storage_avg_time_single_mode,storage_tech_list,"avg",False,"single","different storage technologies",True)   
+    PlotRelationShip(cars_msgs_single_mode, storage_std_single_mode,storage_tech_list,"std",False,"single","different storage technologies",True)
+    
+    
+    PlotRelationShip(cars_msgs_batch_mode, total_avg_time_batch_mode,tech_list,"avg",False,"batch","different technologies",True)
+    PlotRelationShip(cars_msgs_batch_mode, total_std_time_batch_mode,tech_list,"std",False,"batch","different technologies",True)
+         
+    PlotRelationShip(cars_msgs_single_mode, total_avg_time_single_mode,tech_list,"avg",False,"single","different technologies",True)   
+    PlotRelationShip(cars_msgs_single_mode, total_std_time_single_mode,tech_list,"std",False,"single","different technologies",True)   
     
     
     for i in range(len(comm_tech_list)):
 
         
-        PlotRelationShip(cars_msgs_batch_mode[i], comm_avg_time_batch_mode[i],comm_tech_list[i],"avg",False,"batch","communication",comm_tech_list[i])
-        PlotRelationShip(cars_msgs_batch_mode[i], comm_avg_time_batch_mode[i],comm_tech_list[i],"std",False,"batch","communication",comm_tech_list[i])
-        PlotRelationShip(cars_msgs_single_mode[i], comm_avg_time_single_mode[i],comm_tech_list[i],"avg",False,"single","communication",comm_tech_list[i])   
-        PlotRelationShip(cars_msgs_single_mode[i], comm_std_single_mode[i],comm_tech_list[i],"std",False,"single","communication",comm_tech_list[i]) 
+        PlotRelationShip(cars_msgs_batch_mode[i], comm_avg_time_batch_mode[i],comm_tech_list[i],"avg",False,"batch",comm_tech_list[i])
+        PlotRelationShip(cars_msgs_batch_mode[i], comm_std_batch_mode[i],comm_tech_list[i],"std",False,"batch",comm_tech_list[i])
+        PlotRelationShip(cars_msgs_single_mode[i], comm_avg_time_single_mode[i],comm_tech_list[i],"avg",False,"single",comm_tech_list[i])   
+        PlotRelationShip(cars_msgs_single_mode[i], comm_std_single_mode[i],comm_tech_list[i],"std",False,"single",comm_tech_list[i]) 
      
     for i in range(len(storage_tech_list)):
-        PlotRelationShip(cars_msgs_batch_mode[i], storage_avg_time_batch_mode[i],storage_tech_list[i],"avg",False,"batch","storage",storage_tech_list[i])   
-        PlotRelationShip(cars_msgs_batch_mode[i], storage_std_batch_mode[i],storage_tech_list[i],"std",False,"batch","storage",storage_tech_list[i])   
-        PlotRelationShip(cars_msgs_single_mode[i], storage_avg_time_single_mode[i],storage_tech_list[i],"avg",False,"single","storage",storage_tech_list[i])   
-        PlotRelationShip(cars_msgs_single_mode[i], storage_std_single_mode[i],storage_tech_list[i],"std",False,"single","storage",storage_tech_list[i])
+        PlotRelationShip(cars_msgs_batch_mode[i], storage_avg_time_batch_mode[i],storage_tech_list[i],"avg",False,"batch",storage_tech_list[i])   
+        PlotRelationShip(cars_msgs_batch_mode[i], storage_std_batch_mode[i],storage_tech_list[i],"std",False,"batch",storage_tech_list[i])   
+        PlotRelationShip(cars_msgs_single_mode[i], storage_avg_time_single_mode[i],storage_tech_list[i],"avg",False,"single",storage_tech_list[i])   
+        PlotRelationShip(cars_msgs_single_mode[i], storage_std_single_mode[i],storage_tech_list[i],"std",False,"single",storage_tech_list[i])
     
 
 
@@ -321,6 +360,8 @@ def analyzeReports(parent_path,cars_msgs,storage_mode,reports_paths):
             
             excel_info[tech_name][cars_msgs_str][storage_mode]["communication info"] = filtered_df['comm_latency_sec']
             excel_info[tech_name][cars_msgs_str][storage_mode]["storage info"] = filtered_df['write_latency_sec']
+            excel_info[tech_name][cars_msgs_str][storage_mode]["total info"] = filtered_df['comm_latency_sec'] + filtered_df['write_latency_sec']
+            
             excel_info[tech_name][cars_msgs_str][storage_mode]["no of vehicles"] = no_of_records/sending_periodicity
             
                 
