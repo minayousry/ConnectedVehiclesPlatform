@@ -26,17 +26,9 @@ postgresql_inserted_msg_count = 0
 redis_inserted_msg_count = 0
 
 
-kafka_greenplum_start_reception_storage_time = None
-mqtt_influx_start_reception_storage_time = None
-qpid_cassandra_start_reception_storage_time = None
-websocket_postgresql_start_reception_storage_time  = None
-websocket_redis_start_reception_storage_time  = None
+solution_start_reception_storage_time = None
+solution_end_reception_storage_time = None
 
-kafka_greenplum_end_reception_storage_time = None
-mqtt_influx_end_reception_storage_time = None
-qpid_cassandra_end_reception_storage_time = None
-websocket_postgresql_end_reception_storage_time  = None
-websocket_redis_end_reception_storage_time = None
 
 average_communication_latency = 0
 average_storage_latency = 0
@@ -145,108 +137,38 @@ def setInsertedMsgCount(technology, count):
 
         
 def recordStartreceptionStorageTime(technology):
-    global kafka_greenplum_start_reception_storage_time
-    global mqtt_influx_start_reception_storage_time
-    global qpid_cassandra_start_reception_storage_time
-    global websocket_postgresql_start_reception_storage_time
-    global websocket_redis_start_reception_storage_time
-    
 
-    if technology == "kafka_greenplum":
-        kafka_greenplum_start_reception_storage_time = getdatetime()
-    elif technology == "mqtt_influx":
-        mqtt_influx_start_reception_storage_time = getdatetime()
-    elif technology == "qpid_cassandra":
-        qpid_cassandra_start_reception_storage_time = getdatetime()
-    elif technology == "websocket_postgresql":
-        websocket_postgresql_start_reception_storage_time = getdatetime()
-    elif technology == "websocket_redis":
-        websocket_redis_start_reception_storage_time = getdatetime()
-    elif technology == "kafka_redis":
-        kafka_greenplum_start_reception_storage_time = getdatetime()
-    elif technology == "qpid_redis":
-        qpid_cassandra_start_reception_storage_time = getdatetime()
-    elif technology == "qpid_greenplum":
-        qpid_cassandra_start_reception_storage_time = getdatetime()
+    global solution_start_reception_storage_time
+        
+    if technology in technologies:
+        solution_start_reception_storage_time = getdatetime()
     else:
         print("Invalid client name in recordStartreceptionStorageTime.")
         exit(1)
 
+
 def recordEndreceptionStorageTime(technology):
-    global kafka_greenplum_end_reception_storage_time
-    global mqtt_influx_end_reception_storage_time
-    global qpid_cassandra_end_reception_storage_time
-    global websocket_postgresql_end_reception_storage_time
-    global websocket_redis_end_reception_storage_time
     
-    if technology == "kafka_greenplum":
-        kafka_greenplum_end_reception_storage_time = getdatetime()
-    elif technology == "mqtt_influx":
-        mqtt_influx_end_reception_storage_time = getdatetime()
-    elif technology == "qpid_cassandra":
-        qpid_cassandra_end_reception_storage_time = getdatetime()
-    elif technology == "websocket_postgresql":
-        websocket_postgresql_end_reception_storage_time = getdatetime()
-    elif technology == "websocket_redis":
-        websocket_redis_end_reception_storage_time = getdatetime()
-    elif technology == "kafka_redis":
-        kafka_greenplum_end_reception_storage_time = getdatetime()
-    elif technology == "qpid_redis":
-        qpid_cassandra_end_reception_storage_time = getdatetime()
-    elif technology == "qpid_greenplum":
-        qpid_cassandra_end_reception_storage_time = getdatetime()
+    global solution_end_reception_storage_time
+        
+    if technology in technologies:
+        solution_end_reception_storage_time = getdatetime()
     else:
         print("Invalid client name in recordEndreceptionStorageTime.")
         exit(1)
     
 def calculatereceptionStorageDuration(technology):
-    global kafka_greenplum_start_reception_storage_time
-    global mqtt_influx_start_reception_storage_time
-    global qpid_cassandra_start_reception_storage_time
-    global websocket_postgresql_start_reception_storage_time
-    global websocket_redis_start_reception_storage_time
-
-    global kafka_greenplum_end_reception_storage_time
-    global mqtt_influx_end_reception_storage_time
-    global qpid_cassandra_end_reception_storage_time
-    global websocket_postgresql_end_reception_storage_time
-    global websocket_redis_end_reception_storage_time
-
-    if technology == "kafka_greenplum":
-        start_time = kafka_greenplum_start_reception_storage_time
-        end_time = kafka_greenplum_end_reception_storage_time
-    elif technology == "mqtt_influx":
-        start_time = mqtt_influx_start_reception_storage_time
-        end_time = mqtt_influx_end_reception_storage_time
-    elif technology == "qpid_cassandra":
-        start_time = qpid_cassandra_start_reception_storage_time
-        end_time = qpid_cassandra_end_reception_storage_time
-    elif technology == "websocket_postgresql":
-        start_time = websocket_postgresql_start_reception_storage_time
-        end_time = websocket_postgresql_end_reception_storage_time
-    elif technology == "websocket_redis":
-        start_time = websocket_redis_start_reception_storage_time
-        end_time = websocket_redis_end_reception_storage_time
-    elif technology == "kafka_redis":
-        start_time = kafka_greenplum_start_reception_storage_time
-        end_time = kafka_greenplum_end_reception_storage_time
-    elif technology == "qpid_redis":
-        start_time = qpid_cassandra_start_reception_storage_time
-        end_time = qpid_cassandra_end_reception_storage_time
-    elif technology == "qpid_greenplum":
-        start_time = qpid_cassandra_start_reception_storage_time
-        end_time = qpid_cassandra_end_reception_storage_time
+    
+    global solution_start_reception_storage_time
+    global solution_end_reception_storage_time
+    
+    if technology in technologies:
+        start_time = solution_start_reception_storage_time
+        end_time = solution_end_reception_storage_time
     else:
         print("Invalid client name in calculatereceptionStorageDuration.")
         exit(1)
     
-    if start_time is None:
-        print("reception stoarage start time is not recorded.")
-        return None
-    
-    if end_time is None:
-        print("reception stoarage end time is not recorded.")
-        return None
         
     start_time = datetime.datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S.%f")
     end_time = datetime.datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S.%f")
@@ -274,36 +196,27 @@ def createProfilingReport(technology):
         if technology == "kafka_greenplum":
             received_msg_count = kafka_received_msg_count
             sent_msg_count = kafka_sent_msg_count
-            inserted_msg_count = greenplum_inserted_msg_count
         elif technology == "mqtt_influx":
             received_msg_count = mqtt_received_msg_count
             sent_msg_count = mqtt_sent_msg_count
-            inserted_msg_count = influx_inserted_msg_count
         elif technology == "qpid_cassandra":
             received_msg_count = qpid_received_msg_count
             sent_msg_count = qpid_sent_msg_count
-            inserted_msg_count = cassandra_inserted_msg_count
         elif technology == "websocket_postgresql":
             received_msg_count = ws_received_msg_count
             sent_msg_count = ws_sent_msg_count
-            inserted_msg_count = postgresql_inserted_msg_count
         elif technology == "websocket_redis":
             received_msg_count = ws_received_msg_count
             sent_msg_count = ws_sent_msg_count
-            inserted_msg_count = redis_inserted_msg_count
         elif technology == "kafka_redis":
             received_msg_count = kafka_received_msg_count
             sent_msg_count = kafka_sent_msg_count
-            inserted_msg_count = redis_inserted_msg_count
         elif technology == "qpid_redis":
             received_msg_count = qpid_received_msg_count
             sent_msg_count = qpid_sent_msg_count
-            inserted_msg_count = redis_inserted_msg_count
         elif technology == "qpid_greenplum":
             received_msg_count = qpid_received_msg_count
             sent_msg_count = qpid_sent_msg_count
-            inserted_msg_count = redis_inserted_msg_count
-            
     
     print("Communication Performance Report:")        
     print(f"No of sent messages: {sent_msg_count}")
@@ -396,8 +309,6 @@ def createExcelFile(obd2_data_frame,server_tech,is_batch_insertion,db_batch_size
                 storage_time_list = list(obd2_data_frame['storage_time'])
                 first_index = storage_time_list.index(None)
                 
-                
-
                 if first_index != -1:
 
                     remaining_records_of_last_batch = no_of_inserted_transactions % db_batch_size
@@ -406,12 +317,7 @@ def createExcelFile(obd2_data_frame,server_tech,is_batch_insertion,db_batch_size
                     prev_storage_time = obd2_data_frame['storage_time'].iloc[first_index - 1]
 
                     obd2_data_frame['storage_time'].iloc[first_index: last_remaining_element_of_last_batch] = prev_storage_time
-                    #obd2_data_frame.loc[first_index: last_remaining_element_of_last_batch, obd2_data_frame.columns.get_loc('storage_time')] = prev_storage_time
-                    
-
                     obd2_data_frame['storage_time'].iloc[last_remaining_element_of_last_batch:] = last_storage_timestamp
-                    #obd2_data_frame.loc[last_remaining_element_of_last_batch:, 'storage_time'] = last_storage_timestamp
-                    
                     
                 else:
                     print("Error in shofting records")
@@ -451,7 +357,6 @@ def createExcelFile(obd2_data_frame,server_tech,is_batch_insertion,db_batch_size
         max_transaction_latency = obd2_data_frame['transaction_latency_sec'].max()
         min_transaction_latency = obd2_data_frame['transaction_latency_sec'].min()
 
-        #no_of_cars = obd2_data_frame['vehicle_id'].nunique()
         no_of_cars = no_of_inserted_transactions
 
         file_path = generation_path

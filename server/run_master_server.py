@@ -2,11 +2,17 @@ import multiprocessing
 import argparse
 
 
-import Kafka_GreenPlum.fleet_kafka_GP_run as kafka_gp
-import mqtt_Influx.fleet_mqtt_influx_run as mqtt_influx
-import qpid_cassandra.fleet_qpid_cassandra_run as qpid_cassandra
-import webSockets_Postgresql.fleet_ws_postpresql_run as websocket_postgresql
-import webSockets_Redis.fleet_ws_redis_run as websocket_redis
+import comm_tech.kafka.kafka_run as kafka
+import comm_tech.mqtt.mqtt_run as mqtt
+import comm_tech.qpid.qpid_run as qpid
+import comm_tech.websocket.websocket_run as websocket
+
+import database_tech.greenplum.greenplum_run as greenplum
+import database_tech.influx.influx_run as influx
+import database_tech.cassandra.cassandra_run as cassandra
+import database_tech.postgresql.postpresql_run as postgresql
+import database_tech.redis.redis_run as redis
+
 import ctypes
 
 #import utilities
@@ -16,7 +22,8 @@ import configurations as cfg
 
 from datetime import datetime,timezone
 
-
+comm_modules = {"kafka":kafka,"mqtt":mqtt,"qpid":qpid,"websocket":websocket}
+databas_modules = {"greenplum":greenplum,"influx":influx,"cassandra":cassandra,"postgresql":postgresql,"redis":redis}
 
 def floatToStringTimestamp(last_storage_timestamp_obj, format='%Y-%m-%d %H:%M:%S.%f'):
     float_timestamp = 0
@@ -77,8 +84,6 @@ def runProcesses(server_tech,comm_process, database_process):
         return result,no_of_received_msgs_obj.value,no_of_sent_msgs_obj.value,timestamp_str
 
 
-
-
 def createReport(database_extract_func,server_tech,last_storage_timestamp):
     
     print("Extracting information from the database...")
@@ -121,84 +126,84 @@ if __name__ == '__main__':
     
     
     if server_tech == "kafka_greenplum":
-        comm_process = kafka_gp.kafkaConsumerProcess
+        comm_process = kafka.kafkaConsumerProcess
         
         if cfg.enable_database_batch_inserion:
-            database_process = kafka_gp.storeInDatabaseBatchProcess
+            database_process = greenplum.storeInDatabaseBatchProcess
         else:
-            database_process = kafka_gp.storeInDatabaseProcess
+            database_process = greenplum.storeInDatabaseProcess
             
-        database_extract_func = kafka_gp.extractFromDatabase
+        database_extract_func = greenplum.extractFromDatabase
 
         
     elif server_tech == "mqtt_influx":
-        comm_process = mqtt_influx.mqttProcess
+        comm_process = mqtt.mqttProcess
         
         if cfg.enable_database_batch_inserion:
-            database_process = mqtt_influx.influxBatchProcess
+            database_process = influx.influxBatchProcess
         else:
-            database_process = mqtt_influx.influxProcess
+            database_process = influx.influxProcess
             
-        database_extract_func = mqtt_influx.extractFromDatabase
+        database_extract_func = influx.extractFromDatabase
         
     elif server_tech == "qpid_cassandra":
-        comm_process = qpid_cassandra.receiverProcess
+        comm_process = qpid.receiverProcess
         
         if cfg.enable_database_batch_inserion:
-            database_process = qpid_cassandra.databaseBatchProcess
+            database_process = cassandra.databaseBatchProcess
         else:
-            database_process = qpid_cassandra.databaseProcess
+            database_process = cassandra.databaseProcess
             
-        database_extract_func = qpid_cassandra.extractFromDatabase
+        database_extract_func = cassandra.extractFromDatabase
         
         
     elif server_tech == "websocket_postgresql":
-        comm_process = websocket_postgresql.websocketServerProcess
+        comm_process = websocket.websocketServerProcess
         
         if cfg.enable_database_batch_inserion:
-            database_process = websocket_postgresql.storeInDatabaseBatchProcess
+            database_process = postgresql.storeInDatabaseBatchProcess
         else:
-            database_process = websocket_postgresql.storeInDatabaseProcess
+            database_process = postgresql.storeInDatabaseProcess
             
-        database_extract_func = websocket_postgresql.extractFromDatabase
+        database_extract_func = postgresql.extractFromDatabase
         
         
     elif server_tech == "websocket_redis":
-        comm_process = websocket_redis.websocketServerProcess
+        comm_process = websocket.websocketServerProcess
         if cfg.enable_database_batch_inserion:
-            database_process = websocket_redis.dbBatchWriterProcess
+            database_process = redis.dbBatchWriterProcess
         else:
-            database_process = websocket_redis.dbWriterProcess
-        database_extract_func = websocket_redis.extractFromDatabase
+            database_process = redis.dbWriterProcess
+        database_extract_func = redis.extractFromDatabase
     
     elif server_tech == "kafka_redis":
-        comm_process = kafka_gp.kafkaConsumerProcess
+        comm_process = kafka.kafkaConsumerProcess
         
         if cfg.enable_database_batch_inserion:
-            database_process = websocket_redis.dbBatchWriterProcess
+            database_process = redis.dbBatchWriterProcess
         else:
-            database_process = websocket_redis.dbWriterProcess
-        database_extract_func = websocket_redis.extractFromDatabase
+            database_process = redis.dbWriterProcess
+        database_extract_func = redis.extractFromDatabase
         
     elif server_tech == "qpid_redis":
-        comm_process = qpid_cassandra.receiverProcess
+        comm_process = qpid.receiverProcess
         
         if cfg.enable_database_batch_inserion:
-            database_process = websocket_redis.dbBatchWriterProcess
+            database_process = redis.dbBatchWriterProcess
         else:
-            database_process = websocket_redis.dbWriterProcess
-        database_extract_func = websocket_redis.extractFromDatabase
+            database_process = redis.dbWriterProcess
+        database_extract_func = redis.extractFromDatabase
         
     elif server_tech == "qpid_greenplum":
-        comm_process = qpid_cassandra.receiverProcess
+        comm_process = qpid.receiverProcess
         
         
         if cfg.enable_database_batch_inserion:
-            database_process = kafka_gp.storeInDatabaseBatchProcess
+            database_process = kafka.storeInDatabaseBatchProcess
         else:
-            database_process = kafka_gp.storeInDatabaseProcess
+            database_process = greenplum.storeInDatabaseProcess
             
-        database_extract_func = kafka_gp.extractFromDatabase
+        database_extract_func = greenplum.extractFromDatabase
         
     try:
         

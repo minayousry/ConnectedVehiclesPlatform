@@ -1,11 +1,12 @@
-    
 import argparse
 
-import Kafka_GreenPlum.greenplum_create_db as gp_db
-import mqtt_Influx.influx_create_db as influx_db
-import qpid_cassandra.cassandra_create_db as cassandra_db
-import webSockets_Postgresql.postgresql_create_db as postgresql_db
-import webSockets_Redis.redis_create_db as redis_db
+import database_tech.greenplum.greenplum_create_db as greenplum
+import database_tech.influx.influx_create_db as influx
+import database_tech.cassandra.cassandra_create_db as cassandra
+import database_tech.postgresql.postgresql_create_db as postgresql
+import database_tech.redis.redis_create_db as redis
+
+
 import asyncio
 import configurations as cfg
    
@@ -24,15 +25,15 @@ if __name__ == '__main__':
     database_technology = args.database_technology
     
     if database_technology == "greenplum":
-        database_create_func = gp_db.createDatabase
+        database_create_func = greenplum.createDatabase
     elif database_technology == "influx":
-        database_create_func = influx_db.createDatabase
+        database_create_func = influx.createDatabase
     elif database_technology == "cassandra":
-        database_create_func = cassandra_db.createDatabase
+        database_create_func = cassandra.createDatabase
     elif database_technology == "postgresql":
-        database_create_func = postgresql_db.createDatabase  
+        database_create_func = postgresql.createDatabase  
     elif database_technology == "redis":
-        database_create_func = redis_db.createDatabase
+        database_create_func = redis.createDatabase
     else:
         print("Invalid server technology. Please select one of the following: influx, greenplum, cassandra, postgresql or redis")
         exit(1)

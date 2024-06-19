@@ -6,24 +6,32 @@ import subprocess
 #import utilities
 import server_utilities as server_utilities
 
-import Kafka_GreenPlum.greenplum_create_db as gp_db
-import mqtt_Influx.influx_create_db as influx_db
-import qpid_cassandra.cassandra_create_db as cassandra_db
-import webSockets_Postgresql.postgresql_create_db as postgresql_db
-import webSockets_Redis.redis_create_db as redis_db
+
+import database_tech.greenplum.greenplum_create_db as greenplum
+import database_tech.influx.influx_create_db as influx
+import database_tech.cassandra.cassandra_create_db as cassandra
+import database_tech.postgresql.postgresql_create_db as postgresql
+import database_tech.redis.redis_create_db as redis
+
+
 
 import configurations as cfg
 
 
 
-def initServers(bash_script_path):
+def initServers(bash_comm_script_path,bash_db_script_path):
     
-    result = subprocess.run(f". {bash_script_path}",shell=True,check=True)
+    result = subprocess.run(f". {bash_comm_script_path}",shell=True,check=True)
 
     # Check if the script ran successfully
     if result.returncode == 0:
-        print("Bash script executed successfully")
-        result = True
+        print("Comm Bash script executed successfully")
+        result = subprocess.run(f". {bash_db_script_path}",shell=True,check=True)
+        if result.returncode == 0:
+            print("database Bash script executed successfully")    
+            result = True
+        else:
+            result = False
     else:
         print("Error executing Bash script")
         print("Error message:")
@@ -77,12 +85,19 @@ if __name__ == '__main__':
     comm_process = None
     database_process = None
     database_extract_func = None
-    generation_path = "fleetManager/server/Kafka_GreenPlum/"
+
+    
+    bash_comm_script_path = "./comm_tech/"
+    bash_db_script_path = "./database_tech/"
+    
+    techs = server_tech.split("_")
+    
+    bash_comm_script_path += (techs[0] + "/"+techs[0] + "_run_server.sh")
+    bash_db_script_path += (techs[1] + "/"+techs[1] + "_run_server.sh")
     
     
     if server_tech == "kafka_greenplum":
-        bash_script_path = "./Kafka_GreenPlum/run_kafka_GP_servers.sh"
-        database_create_func = gp_db.createDatabase
+        database_create_func = greenplum.createDatabase
         kafka_cfg_path = "/home/mina_yousry_iti/kafka/config/server.properties"
         text_to_search = "advertised.listeners=PLAINTEXT:"
         kafka_port_num = "9092"
@@ -98,23 +113,19 @@ if __name__ == '__main__':
             setKafkaIpAddress(kafka_cfg_path,text_to_search,new_kafka_server)
         
     elif server_tech == "mqtt_influx":
-        bash_script_path = "./mqtt_Influx/run_mqtt_influx_servers.sh"
-        database_create_func = influx_db.createDatabase
+        database_create_func = influx.createDatabase
     elif server_tech == "qpid_cassandra":
-        bash_script_path = "./qpid_cassandra/run_qpid_cassandra_servers.sh"
-        database_create_func = cassandra_db.createDatabase
+        database_create_func = cassandra.createDatabase
     elif server_tech == "websocket_postgresql":
-        bash_script_path = "./webSockets_Postgresql/run_ws_postgresql_servers.sh"
-        database_create_func = postgresql_db.createDatabase  
+        database_create_func = postgresql.createDatabase  
     elif server_tech == "websocket_redis":
-        bash_script_path = "./webSockets_Redis/run_ws_redis_servers.sh"
-        database_create_func = redis_db.createDatabase
+        database_create_func = redis.createDatabase
     else:
         print("Invalid server technology. Please select one of the following: mqtt_influx, kafka_greenplum, qpid_cassandra, websocket_postgresql or websocket_redis")
         exit(1)
  
     try:
-        result = initServers(bash_script_path)
+        result = initServers(bash_comm_script_path,bash_db_script_path)
          
         if result:
             print("Servers are running.")
